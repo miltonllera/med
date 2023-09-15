@@ -1,0 +1,8 @@
+_target_: src.dataset.emojis.SingleEmojiDataset
+
+emoji: salamander
+target_size: 16
+pad: 2
+
+batch_size: 64
+eval_batch_size: 1

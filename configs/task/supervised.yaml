@@ -1,0 +1,5 @@
+_target_: src.task.supervised.SupervisedTask
+
+datamodule: ???  # to be filled out in concrete experiment
+prepare_batch: null
+loss_fn: ???  # to be filled out in concrete experiment

@@ -1,0 +1,4 @@
+_target_: ???    # for each strategy, add the dot path to its constructor
+_partial_: True  # all strategies need the parameters and population size at initialization
+num_dims: null   # we should be using pholder_params
+sigma_init: 0.1

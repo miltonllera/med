@@ -1,0 +1,5 @@
+_target_: src.trainer.callback.VisualizationCallback
+visualization: ${get_fn:src.analysis.visualization.growth_visualization}
+dataset: ${task.datamodule}
+save_dir: ${paths.output_dir}/visualizations
+save_prefix: ""

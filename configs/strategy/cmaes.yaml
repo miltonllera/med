@@ -1,0 +1,6 @@
+defaults:
+    - base
+    - _self_
+
+_target_: evosax.CMA_ES
+sigma_init: 0.01

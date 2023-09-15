@@ -1,0 +1,6 @@
+defaults:
+  - base
+
+_target_: evosax.OpenES
+opt_name: adam
+sigma_init: 0.01

@@ -1,0 +1,7 @@
+_target_: src.trainer.callback.MonitorCheckpoint
+
+save_dir: ${paths.output_dir}/checkpoints
+file_template: "iteration_{iteration:06d}"
+monitor_key: null
+mode: min
+state_getter: null

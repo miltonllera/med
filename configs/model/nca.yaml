@@ -1,0 +1,50 @@
+# NCA implemented as an equinox model
+# Note that Equinox moduls require a KeyArray at instantiation time for some layers. For this
+# we use the resolver 'prng_key'. However, this may make exact replication slightly difficult
+# since the value of the rng depends on the experiment seed.
+
+
+_target_: src.model.nca.NCA
+
+dev_steps: [23, 48]
+state_size: 16
+grid_size: ???  # set in each experiment
+update_prob: 0.5
+
+input_encoder:
+  _target_: src.nn.ca.ConstantInputEncoder
+  state_size: ${model.state_size}
+  grid_size: ${model.grid_size}
+
+context_fn:
+  _target_: src.nn.ca.IdentityContextFn
+
+alive_fn:
+  _target_: src.nn.ca.MaxPoolAlive
+  alive_threshold: 0.1
+  alive_bit: 3
+
+message_fn:
+  _target_: src.nn.ca.IdentityAndSobelFilter
+
+update_fn:
+  _target_: equinox.nn.Sequential
+  layers:
+    - _target_: equinox.nn.Conv2d
+      in_channels: ${prod:${model.state_size},3}
+      out_channels: 64
+      kernel_size: 1
+      key: ${prng_key:}
+    - _target_: equinox.nn.Lambda
+      fn: ${get_fn:jax.nn.relu}
+    - _target_: equinox.nn.Conv2d
+      in_channels: 64
+      out_channels: ${model.state_size}
+      kernel_size: 1
+      key: ${prng_key:}
+
+output_decoder:
+  _target_: src.nn.ca.SliceOutput
+  dim: 0
+  start_idx: 0
+  end_idx: 3

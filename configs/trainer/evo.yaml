@@ -1,0 +1,10 @@
+_target_: src.trainer.evo.EvoTrainer
+
+steps: 10000
+eval_steps: 100
+eval_freq: 1000
+n_repeats: 1
+use_progress_bar: True
+
+task: ???
+strategy: snes

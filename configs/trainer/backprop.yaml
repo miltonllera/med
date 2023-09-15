@@ -1,0 +1,11 @@
+_target_: src.trainer.backprop.BackpropTrainer
+
+steps: 10000
+eval_steps: 100
+eval_freq: 1000
+use_progress_bar: True
+
+task: ???
+optim:
+  _target_: optax.adam
+  learning_rate: 2e-3

@@ -1,0 +1,32 @@
+#@package _global_
+
+defaults:
+  - /dataset@task.datamodule: single_emoji
+  - /callbacks@callbacks.growth_viz: growth_viz
+  - override /trainer: backprop
+  - override /model: nca
+  - override /task: supervised
+  - _self_
+
+tags: ["supervised", "single_emoji", "nca", "backprop"]
+
+model:
+  grid_size: [64, 64]
+
+task:
+  datamodule:
+    target_size: 40
+    pad: 12
+
+  loss_fn: ${get_fn:src.task.loss.reconstruction_loss}
+  prepare_batch:
+    _target_: src.task.utils.InputSelect
+    idx: 0
+
+trainer:
+  steps: 10000
+  eval_freq: 100
+
+callbacks:
+  model_checkpoint:
+    monitor_key: val/loss

@@ -1,0 +1,5 @@
+defaults:
+  - base
+
+_target_: evosax.SNES
+sigma_init: 0.01

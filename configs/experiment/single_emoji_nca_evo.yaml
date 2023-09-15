@@ -1,0 +1,38 @@
+#@package _global_
+
+defaults:
+  - /dataset@task.datamodule: single_emoji
+  - /strategy@trainer.strategy: cmaes
+  - /callbacks@callbacks.growth_viz: growth_viz
+  - override /trainer: evo
+  - override /model: nca
+  - override /task: supervised
+  - _self_
+
+tags: ["supervised", "single_emoji", "nca", "evo"]
+
+model:
+  grid_size: [20, 20]
+
+task:
+  loss_fn: ${get_fn:src.task.loss.reconstruction_loss}
+  prepare_batch:
+    _target_: src.task.utils.InputSelect
+    idx: 0
+
+trainer:
+  steps: 10000
+  eval_freq: 100
+
+  strategy:
+    popsize: 100
+
+  strategy_params:
+    init_min: -0.1
+    init_max: 0.1
+    clip_min: -1
+    clip_max: 1
+
+callbacks:
+  model_checkpoint:
+    monitor_key: val/loss_mean

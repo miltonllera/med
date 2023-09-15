@@ -1,0 +1,3 @@
+tensorboard:
+  _target_: src.trainer.logger.TensorboardLogger
+  log_dir: "${paths.output_dir}/tensorboard/"
