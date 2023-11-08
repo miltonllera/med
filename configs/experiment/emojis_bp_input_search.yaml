@@ -1,0 +1,39 @@
+#@package _global_
+
+defaults:
+  - /dataset@task.datamodule: emojis
+  # - /callbacks@callbacks.growth_viz: growth_viz
+  # - /optim@task.optim.learning_rate: cosine_scheduler_with_restarts
+  - override /trainer: backprop
+  - override /model: nca
+  - override /task: input_optim
+  - _self_
+
+tags: ["input_search", "emojis", "nca", "backprop"]
+
+model:
+  grid_size: [64, 64]
+
+task:
+  datamodule:
+    target_size: 40
+    pad: 12
+
+  input_size: ${model.state_size}
+
+  loss_fn: ${get_fn:src.task.loss.reconstruction_loss}
+  prepare_batch:
+    _target_: src.task.utils.InputSelect
+    idx: 0
+  # optim:
+  #   learning_rate:
+  #     transition_steps: 1000
+  #     n_restarts: 9
+
+trainer:
+  steps: 10000
+  eval_freq: 100
+
+callbacks:
+  model_checkpoint:
+    monitor_key: val/loss
