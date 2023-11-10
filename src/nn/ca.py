@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -62,7 +62,7 @@ class ConstantInputEncoder(eqx.Module):
 
 
 class IdentityContextFn(eqx.Module):
-    def __call__(self, cell_state, input_embedding, k):
+    def __call__(self, cell_state, input_embedding, *, key=None):
         # return jnp.repeat(input_embedding, 3, 0)
         return input_embedding
 
@@ -72,18 +72,16 @@ class SliceOutput(eqx.Module):
     dim: int
     start_idx: int
     end_idx: int
-    clip_values: Optional[Tuple[float, float]]
+    squashing_function: Callable
 
-    def __init__(self, dim, end_idx, start_idx=0, clip_values=(0., 1.0), *, key=None):
+    def __init__(self, dim, end_idx, start_idx=0, squashing_function=lambda x: x, *, key=None):
         super().__init__()
 
         self.dim = dim
         self.start_idx = start_idx
         self.end_idx = end_idx
-        self.clip_values = clip_values
+        self.squashing_function = squashing_function
 
     def __call__(self, inputs):
         outputs = jax.lax.slice_in_dim(inputs, self.start_idx, self.end_idx + 1, 1, self.dim)
-        if self.clip_values is not None:
-            outputs = jax.numpy.clip(outputs, *self.clip_values)
-        return outputs
+        return self.squashing_function(outputs)

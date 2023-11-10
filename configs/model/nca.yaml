@@ -6,7 +6,7 @@
 
 _target_: src.model.nca.NCA
 
-dev_steps: [23, 48]
+dev_steps: [46, 96]
 state_size: 16
 grid_size: ???  # set in each experiment
 update_prob: 0.5
@@ -32,13 +32,13 @@ update_fn:
   layers:
     - _target_: equinox.nn.Conv2d
       in_channels: ${prod:${model.state_size},3}
-      out_channels: 64
+      out_channels: 128
       kernel_size: 1
       key: ${prng_key:}
     - _target_: equinox.nn.Lambda
       fn: ${get_fn:jax.nn.relu}
     - _target_: equinox.nn.Conv2d
-      in_channels: 64
+      in_channels: 128
       out_channels: ${model.state_size}
       kernel_size: 1
       key: ${prng_key:}
@@ -48,3 +48,4 @@ output_decoder:
   dim: 0
   start_idx: 0
   end_idx: 3
+  squashing_function: ${get_fn:jax.nn.sigmoid}

@@ -68,7 +68,7 @@ class SupervisedTask(Task):
         """
         (pred, y), state = self.predict(model, state, key)
         pred, y = self.prepare_batch(pred, y)
-        loss = jax.vmap(self.loss_fn, in_axes=(0, 0))(pred, y)
+        loss = jax.vmap(self.loss_fn)(pred, y)
         loss = loss.sum() / len(y)
         return loss, state
 
@@ -93,9 +93,9 @@ class SupervisedTask(Task):
     ) -> Tuple[Tuple[TENSOR, TENSOR], PyTree]:
         state = self.datamodule.next(state)
         x, y = state.batch
-        pred = jax.vmap(model, in_axes=(0, None))(x, key)
 
-        # jax.debug.callback(plot_example, pred)
+        batched_keys = jr.split(key, len(x))
+        pred = jax.vmap(model)(x, batched_keys)
 
         return (pred, y), state
 

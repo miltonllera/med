@@ -4,6 +4,7 @@ from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import equinox as eqx
+# import optax
 
 
 class Callback:
@@ -103,6 +104,15 @@ class MonitorCheckpoint(Checkpoint):
             self._best_val = metric
             self._ckpt_state = state
             self._ckpt_iter = iter
+
+
+# class LearningRateMonitor(Callback):
+#     def __init__(self):
+#         self.lr_history = []
+
+#     def train_loop_end(self, _, training_state):
+#         opt_state: optax.OptState = training_state[1]
+#         self.lr_history.append(opt_state[
 
 
 class VisualizationCallback(Callback):

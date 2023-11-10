@@ -81,7 +81,7 @@ class NCA(DevelopmentalModel):
             update_key, context_key, carry_key = jr.split(key, 3)
 
             pre_alive_mask = self.alive_fn(cell_states)
-            control_signal = self.context_fn(cell_states, input_embedding, context_key)
+            control_signal = self.context_fn(cell_states, input_embedding, key=context_key)
 
             message_vectors = self.message_fn(
                 cell_states + control_signal * pre_alive_mask.astype(jnp.float32)
