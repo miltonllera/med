@@ -1,0 +1,7 @@
+  _target_: src.optim.scheduler.cosine_schedule_with_restarts
+  transition_steps: 100
+  peak_value: 1e-2
+  pct_start: 0.5
+  div_factor: 1e2
+  final_div_factor: 1e2
+  n_restarts: 2
