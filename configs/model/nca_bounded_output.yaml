@@ -1,0 +1,11 @@
+defaults:
+  - nca
+  - _self_
+
+
+output_decoder:
+  _target_: src.nn.ca.SliceOutput
+  dim: 0
+  start_idx: 0
+  end_idx: 3
+  squashing_function: ${get_fn:jax.nn.sigmoid}

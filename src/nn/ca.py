@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Callable, Optional, Tuple
+from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp

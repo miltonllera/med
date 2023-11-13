@@ -1,0 +1,21 @@
+defaults:
+  - nca
+  - _self_
+
+
+update_fn:
+  _target_: equinox.nn.Sequential
+  layers:
+    - _target_: equinox.nn.Conv2d
+      in_channels: ${prod:${model.state_size},3}
+      out_channels: 128
+      kernel_size: 1
+      key: ${prng_key:}
+    - _target_: equinox.nn.Lambda
+      fn: ${get_fn:jax.nn.relu}
+    - _target_: equinox.nn.Conv2d
+      in_channels: 128
+      out_channels: ${model.state_size}
+      kernel_size: 1
+      key: ${prng_key:}
+    - ${get_fn:jax.nn.tanh}
