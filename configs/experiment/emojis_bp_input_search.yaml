@@ -2,7 +2,9 @@
 
 defaults:
   - /dataset@task.datamodule: emojis
-  # - /callbacks@callbacks.growth_viz: growth_viz
+  - /callbacks@callbacks.growth_viz: growth_viz
+  - /callbacks@callbacks.lr_monitor: lr_monitor
+  - /callbacks@callbacks.search_lr_monitor: lr_monitor
   # - /optim@task.optim.learning_rate: cosine_scheduler_with_restarts
   - override /trainer: backprop
   - override /model: nca
@@ -37,3 +39,6 @@ trainer:
 callbacks:
   model_checkpoint:
     monitor_key: val/loss
+
+  search_lr_monitor:
+    state_indexer: ${get_fn:src.trainer.callbacks.search_task_optimizer_state}

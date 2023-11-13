@@ -1,11 +1,12 @@
-from functools import partial
-import jax
+from abc import ABC, abstractmethod
+from typing import Any
+
 import jax.tree_util as jtu
 from jaxtyping import Array, Float
 
 
 TENSOR = Float[Array, "..."]
-# jitted_closure = partial(jax.jit, static_argnums=(0, 1))
+
 
 class jitted_method:
     def __init__(self, method):
@@ -17,3 +18,9 @@ class jitted_method:
         if instance is None:
             return self.method
         return jtu.Partial(self.method, instance)
+
+
+class StateIndexer(ABC):
+    @abstractmethod
+    def __call__(self, trainer_state) -> Any:
+        raise NotImplementedError

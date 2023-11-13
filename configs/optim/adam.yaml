@@ -1,0 +1,4 @@
+defaults:
+  - optimizer
+
+optim_fn: ${get_fn:optax.adam}

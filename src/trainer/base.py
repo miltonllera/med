@@ -26,22 +26,30 @@ class Trainer(ABC):
         loggers: Optional[List[Logger]],
         callbacks: Optional[List[Callback]],
         use_progress_bar: bool = True,
+        # performance options
+        _scan_steps: Optional[int] = None,
     ) -> None:
         if loggers is None:
-            # TODO: Instantiate default logger
-            raise NotImplementedError
+            loggers = []
 
-        if callbacks is not None:
+        if callbacks is None:
+            callbacks = []
+
+        if len(loggers) > 0:
             for c in callbacks:
                 c.attach_logger(loggers[0])
 
         if eval_freq is None:
             eval_freq = eval_steps
 
+        if _scan_steps is None:
+            _scan_steps = 1
+
         self.task = task
         self.steps = steps
         self.eval_steps = eval_steps
         self.eval_freq = eval_freq
+        self._scan_steps = _scan_steps
         self.loggers = loggers
         self.callbacks = callbacks
         self.use_progress_bar = use_progress_bar
@@ -60,20 +68,18 @@ class Trainer(ABC):
         raise NotImplementedError
 
     def _fit_loop(self, model, step_fn, val_step_fn, *, key, **kwargs):
-        loop_iters = self.eval_freq
-        n_loops = self.steps // self.eval_freq
+        # scan_loop_iters = self.scan_steps
+        n_loops = self.steps // self._scan_steps
 
-        if self.steps % self.eval_freq != 0:
-            _logger.info(
-                "The number of steps in the trainer is not divisible by the eval_freq, "
-                "thus more steps than specified will be run: "
-                f"steps = {self.steps}, eval_freq = {self.eval_freq}"
-            )
+        _logger.info(
+            f"Validation set to be run every {jnp.lcm(self._scan_steps, self.eval_freq).item()}"
+            " steps. Check 'scan_step' and 'eval_freq values if this is not correct."
+        )
 
         self.run_callbacks('init')
 
         if self.use_progress_bar:
-            step_fn = progress_bar_scan(loop_iters)(step_fn)
+            step_fn = progress_bar_scan(self._scan_steps)(step_fn)
             val_step_fn = progress_bar_scan(self.eval_steps)(val_step_fn)
 
         init_key, val_key = split_key(key)
@@ -81,25 +87,30 @@ class Trainer(ABC):
 
         for i in range(n_loops):
             training_state, fitness_or_loss = jax.lax.scan(
-                step_fn, training_state, jnp.arange(loop_iters)
+                step_fn, training_state, jnp.arange(self._scan_steps)
             )
 
             log_dict = self.format_training_resutls(fitness_or_loss)
 
-            self.train_loop_end((i + 1) * loop_iters, log_dict, training_state)
+            self.train_loop_end((i + 1) * self._scan_steps, log_dict, training_state)
 
-            val_key, init_val_key = split_key(val_key)
-            validation_state = self.init("val", model, training_state, key=init_val_key, **kwargs)
+            if ((i + 1) * self._scan_steps) % self.eval_freq == 0:
+                val_key, init_val_key = split_key(val_key)
+                validation_state = self.init(
+                    "val", model, training_state, key=init_val_key, **kwargs
+                )
 
-            validation_state, validation_metrics = jax.lax.scan(
-                val_step_fn, validation_state, jnp.arange(self.eval_steps)
-            )
+                validation_state, validation_metrics = jax.lax.scan(
+                    val_step_fn, validation_state, jnp.arange(self.eval_steps)
+                )
 
-            validation_metrics = self.format_metrics("val", validation_metrics)
+                validation_metrics = self.format_metrics("val", validation_metrics)
 
-            self.validation_end((i + 1) * loop_iters, validation_metrics, validation_state)
+                self.validation_end(
+                    (i + 1) * self._scan_steps, validation_metrics, validation_state
+                )
 
-        self.train_end(n_loops * loop_iters, training_state)
+        self.train_end(n_loops * self._scan_steps, training_state)
 
         return training_state
 
@@ -110,9 +121,10 @@ class Trainer(ABC):
         test_state = self.init("test", model, trainer_state, key=key, **kwargs)
 
         # TODO: For some reason this isn't working and I am tired of trying to figure out why
-        # UPDATE: I found that it's the 'max' operation in the max pool when jitting a combination
-        # of statics and parameters, instead of wrapping the combination operation in a jitted
-        # function.
+        # UPDATE: I found that it's the 'max' operation in the max pool when jitting an already
+        # instantiated model (i.e. model = eqx.combine(...)), instead of wrapping the instantiation
+        # operation in the jitted function:
+
         # test_state, test_metrics = jax.lax.scan(
         #     test_fn, test_state, jnp.arange(self.eval_iters)
         # )

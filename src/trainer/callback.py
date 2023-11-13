@@ -4,7 +4,7 @@ from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import equinox as eqx
-# import optax
+import optax
 
 
 class Callback:
@@ -106,13 +106,30 @@ class MonitorCheckpoint(Checkpoint):
             self._ckpt_iter = iter
 
 
-# class LearningRateMonitor(Callback):
-#     def __init__(self):
-#         self.lr_history = []
+def backprop_optimizer_state(training_state):
+    return training_state[1]
 
-#     def train_loop_end(self, _, training_state):
-#         opt_state: optax.OptState = training_state[1]
-#         self.lr_history.append(opt_state[
+
+def search_task_optimizer_state(training_state):
+    return training_state[2][1]
+
+
+class LRMonitor(Callback):
+    def __init__(self, state_indexer=None, key='lr_value'):
+        if state_indexer is None:
+            state_indexer = backprop_optimizer_state
+
+        self.get_state = state_indexer
+        self.lr_history = []
+        self.key = key
+
+    def train_loop_end(self, iteration, _, training_state):
+        opt_state: optax.OptState = self.get_state(training_state)
+        try:
+            lr = opt_state.hyperparams['learning_rate'].item()  # type: ignore
+            self._logger.log_scalar(self.key, iteration, lr)
+        except AttributeError as e:
+            e.add_note("Did you forget to use 'optax.inject_hyperparams'?")
 
 
 class VisualizationCallback(Callback):
@@ -126,11 +143,13 @@ class VisualizationCallback(Callback):
         self.save_prefix = save_prefix
         os.makedirs(save_dir)
 
-    def test_end(self, _, training_state):
+    def test_end(self, _, training_state) -> Any:
         model = training_state[0]
         model = eqx.tree_at(lambda x: x.output_dev_states, model, True)
         self.viz(model, self.dataset, osp.join(self.save_dir, self.save_prefix))
 
+    # def validation_end(self, iter, metric, state) -> Any:
+    #     model = state[0].best_member
 
 def save_pytree(model: eqx.Module, save_folder: str, save_name: str):
     save_file = osp.join(save_folder, f"{save_name}.eqx")

@@ -1,3 +1,6 @@
+defaults:
+  - /optim@optim: adam
+
 _target_: src.task.input_search.InputOptimization
 
 datamodule: ???  # to be filled out in concrete experiment
@@ -8,5 +11,4 @@ input_size: ???
 
 steps: 10
 optim:
-  _target_: optax.adam
-  learning_rate: 1e-4
+  learning_rate: 0.001

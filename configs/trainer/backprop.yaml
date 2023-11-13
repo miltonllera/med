@@ -1,3 +1,6 @@
+defaults:
+  - /optim: adam
+
 _target_: src.trainer.backprop.BackpropTrainer
 
 steps: 10000
@@ -7,5 +10,4 @@ use_progress_bar: True
 
 task: ???
 optim:
-  _target_: optax.adam
   learning_rate: 2e-3

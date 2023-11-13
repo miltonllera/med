@@ -1,0 +1,6 @@
+# initialize optimizers while injecting hyperparameters for learning rate tracking
+
+_target_: src.optim.base.init_optimizer
+optim_fn: ???
+learning_rate: ???
+inject_hyperparams: True
