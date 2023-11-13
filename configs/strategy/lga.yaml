@@ -1,0 +1,5 @@
+defaults:
+  - base
+
+_target_: evosax.LGA
+net_params: null
