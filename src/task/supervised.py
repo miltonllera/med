@@ -6,7 +6,7 @@ from jaxtyping import Float, PyTree
 
 from src.dataset.base import DataModule
 from src.task.base import MetricCollection, Task
-from src.utils import TENSOR, jitted_method
+from src.utils import TENSOR, jit_method
 
 # import matplotlib.pyplot as plt
 # from src.analysis.visualization import to_img
@@ -46,12 +46,12 @@ class SupervisedTask(Task):
     Task that evaluates the performance of a model at predicting targets from inputs as determined
     by the provided loss function.
     """
-    @jitted_method
+    @jit_method
     def init(self, stage: str, key):
         dataset = self.datamodule.init(stage, key)
         return dataset
 
-    @jitted_method
+    @jit_method
     def eval(
         self,
         model: PyTree,
@@ -72,7 +72,7 @@ class SupervisedTask(Task):
         loss = loss.sum() / len(y)
         return loss, state
 
-    @jitted_method
+    @jit_method
     def validate(
         self,
         model: PyTree,
@@ -84,7 +84,7 @@ class SupervisedTask(Task):
         metrics = self.metrics.compute(pred, y)
         return metrics, state
 
-    @jitted_method
+    @jit_method
     def predict(
         self,
         model: PyTree,

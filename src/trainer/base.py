@@ -11,6 +11,7 @@ from src.trainer.callback import Callback
 from src.trainer.logger import Logger
 from src.trainer.utils import progress_bar_scan
 from src.task.base import Task
+from src.utils import loop
 
 
 _logger = getLogger(__name__)
@@ -28,6 +29,7 @@ class Trainer(ABC):
         use_progress_bar: bool = True,
         # performance options
         _scan_steps: Optional[int] = None,
+        _jit_step_fns: bool = False,  # By default, do not merge the outer step functions
     ) -> None:
         if loggers is None:
             loggers = []
@@ -54,6 +56,7 @@ class Trainer(ABC):
         self.callbacks = callbacks
         self.use_progress_bar = use_progress_bar
         self.metrics_formatter = lambda x: x
+        self._jit_step_fns = _jit_step_fns
 
     @abstractmethod
     def run(self, model: eqx.Module, key: KeyArray) -> eqx.Module:
@@ -78,6 +81,10 @@ class Trainer(ABC):
 
         self.run_callbacks('init')
 
+        if self._jit_step_fns:
+            step_fn = eqx.filter_jit(step_fn)
+            val_step_fn = eqx.filter_jit(val_step_fn)
+
         if self.use_progress_bar:
             step_fn = progress_bar_scan(self._scan_steps)(step_fn)
             val_step_fn = progress_bar_scan(self.eval_steps)(val_step_fn)
@@ -86,8 +93,11 @@ class Trainer(ABC):
         training_state = self.init("train", model, None, key=init_key, **kwargs)
 
         for i in range(n_loops):
-            training_state, fitness_or_loss = jax.lax.scan(
-                step_fn, training_state, jnp.arange(self._scan_steps)
+            # training_state, fitness_or_loss = jax.lax.scan(
+            #     step_fn, training_state, jnp.arange(self._scan_steps)
+            # )
+            training_state, fitness_or_loss = loop(
+                step_fn, training_state, self._scan_steps
             )
 
             log_dict = self.format_training_resutls(fitness_or_loss)

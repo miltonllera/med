@@ -1,3 +1,8 @@
+from abc import ABC, abstractmethod
+from typing import Tuple
+
+import jax
+import jax.numpy as jnp
 import jax.nn as jnn
 import jax.random as jr
 import equinox as eqx
@@ -18,7 +23,7 @@ class DNADecoder(eqx.Module):
     def __init__(
         self,
         alphabet_size: int,
-        dna_seq_size: int,
+        sequence_length: int,
         embedding_size: int,
         input_is_distribution: bool = False,
         *,
@@ -27,7 +32,7 @@ class DNADecoder(eqx.Module):
         key_emb, key_pos = jr.split(key, 2)
 
         self.embedding = Embedding(alphabet_size, embedding_size, key_emb)
-        self.position_embedding = PositionEmbedding(dna_seq_size, embedding_size, key_pos)
+        self.position_embedding = PositionEmbedding(sequence_length, embedding_size, key_pos)
         self.input_is_distribution = input_is_distribution
 
     @property
@@ -51,6 +56,9 @@ class DNADecoder(eqx.Module):
         return self.dna_seq_length * self.alphabet_size
 
     def __call__(self, inputs: Float[Array, "S A"], key: jr.PRNGKeyArray = None):
+        if len(inputs.shape) == 1:
+            inputs = inputs.reshape(*self.dna_shape)
+
         if self.input_is_distribution:
             idxs = inputs.argmax(1)
             inputs = jnn.one_hot(idxs, self.alphabet_size)
@@ -59,7 +67,7 @@ class DNADecoder(eqx.Module):
 
 class DNAContext(eqx.Module):
     """
-    Implementation of cross attention for DNA decoding for Celluar Automatas.
+    Implementation of cross attention for DNA decoding in Celluar Automatas.
     """
     attention: nn.MultiheadAttention
 
@@ -75,8 +83,50 @@ class DNAContext(eqx.Module):
             n_heads, state_size, dna_emb_size, dna_emb_size, output_size, state_size, key=key
         )
 
-    def __call__(self, inputs: Float[Array, "C H W"], dna: Float[Array, "S E"], key: jr.KeyArray):
+    def __call__(
+        self,
+        inputs: Float[Array, "C H W"],
+        dna: Float[Array, "S E"],
+        key: jr.KeyArray
+    ) -> Float[Array, "E H W"]:
         flattened = inputs.reshape(inputs.shape[0], -1).transpose(1, 0)
         return self.attention(
             flattened, dna, dna, key=key
         ).transpose(1, 0).reshape(-1, *inputs.shape[1:])
+
+
+class DNADistribution(eqx.Module, ABC):
+    @abstractmethod
+    def sample_dna(self, key):
+        raise NotImplementedError
+
+    def __call__(self, n_samples, *, key):
+        return jax.vmap(self.sample_dna)(jr.split(key, n_samples))
+
+
+class DNAIndependentSampler(DNADistribution):
+    """
+    Sample DNA strings by independently sampling each character in the sequence. This uses a
+    normal distribution whose parameters can be fitted as part of a model.
+    """
+    dna_shape: Tuple[int, int]
+    logits_mean: Float[Array, "S A"]
+    logits_logvar: Float[Array, "S A"]
+
+    def __init__(
+        self,
+        sequence_length,
+        alphabet_size,
+        key,
+    ):
+        self.dna_shape = sequence_length, alphabet_size
+        self.logits_mean = jr.normal(key, shape=(sequence_length, alphabet_size))
+        self.logits_logvar = jr.normal(key, shape=(sequence_length, alphabet_size))
+
+    def sample_dna(self, key):
+        std = jnp.exp(0.5  * self.logits_logvar)
+        logits = self.logits_mean + std * jr.normal(key, self.dna_shape)
+        return logits
+
+    def partition(self):
+        return eqx.partition(self, eqx.is_array)

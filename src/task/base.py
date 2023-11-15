@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Optional
 import jax.numpy as jnp
 from jaxtyping import Float, Array
 
-from src.utils import jitted_method
+from src.utils import jit_method
 # import equinox as eqx
 
 
@@ -43,7 +43,7 @@ class MetricCollection:
 
         return dict(aggregated_values)
 
-    @jitted_method
+    @jit_method
     def compute(self, preds, targets):
         return tuple([m(preds, targets).sum() / len(targets) for m in self.metrics])
 

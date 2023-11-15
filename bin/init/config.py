@@ -59,7 +59,7 @@ def instantiate_run(cfg) -> INSTANTIATED_RUN_MODULES:
 
 def instantiate_task(task_cfg) -> Task:
     _log.info(
-        f"Initializing task <{task_cfg._target_}> with dataset <{task_cfg.datamodule._target_}>..."
+        f"Initializing task <{task_cfg._target_}> ..."
     )
     datamodule: Task = instantiate(task_cfg)
     return datamodule

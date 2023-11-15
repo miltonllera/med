@@ -1,5 +1,5 @@
 # from functools import partial
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -51,11 +51,12 @@ class EvoTrainer(Trainer):
 
     def run(
         self,
-        model: FunctionalModel,
+        model: Union[FunctionalModel, Tuple[FunctionalModel, ...]],
         key: jr.PRNGKeyArray,
     ):
         train_key, test_key = jr.split(key)
-        params, statics = model.partition()
+
+        params, statics = split_model(model)
         strategy, strategy_params = self.init_strategy(params)
 
         def _eval_fn(params, task_state, key):
@@ -71,7 +72,6 @@ class EvoTrainer(Trainer):
         else:
             eval_fn = _eval_fn
 
-        @eqx.filter_jit
         def evo_step(carry, _):
             es_state, task_state, key = carry
             key, ask_key, eval_key = jr.split(key, 3)
@@ -96,7 +96,6 @@ class EvoTrainer(Trainer):
             m = eqx.combine(params, statics)
             return self.task.validate(m, task_state, key)
 
-        @eqx.filter_jit
         def val_step(carry, _):
             es_state, task_state, key = carry
             key, val_key, ask_key = jr.split(key, 3)
@@ -120,7 +119,6 @@ class EvoTrainer(Trainer):
             strategy_params=strategy_params
         )
 
-        @eqx.filter_jit
         def test_step(carry, _):
             model, task_state, key = carry
             key, test_key = jr.split(key, 2)
@@ -217,3 +215,12 @@ class EvoTrainer(Trainer):
             if len(ckpt) > 0:
                 state = ckpt[0].best_state
         return strategy.param_reshaper.reshape_single(state[0].best_member)
+
+
+def split_model(model: Union[FunctionalModel, Tuple[FunctionalModel, ...]]) -> Tuple[PyTree, ...]:
+    if isinstance(model, FunctionalModel):
+        return model.partition()
+
+    partitions = tuple(m.partition() for m in model)
+
+    return tuple(zip(*partitions))

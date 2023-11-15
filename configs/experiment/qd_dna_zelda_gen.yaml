@@ -1,0 +1,51 @@
+#@package _global_
+
+defaults:
+  - /problem@task.problem: zelda_levelgen
+  - /strategy@trainer.strategy: cmaes
+  - /callbacks@callbacks.growth_viz: growth_viz
+  - override /trainer: evo
+  - override /model: nca_dna
+  - override /task: dna_qd
+  - _self_
+
+
+tags: ["qd", "zelda", "nca_dna", "evo"]
+
+model:
+  nca:
+    grid_size: ["${task.problem.height}", "${task.problem.width}"]
+  dna_sampler:
+    sequence_length: 8
+    alphabet_size: 4
+
+task:
+  n_iters: 2
+  popsize: 2
+  n_centroids: 3
+
+  qd_algorithm:
+    emitter:
+      batch_size: ${task.popsize}
+
+    metrics_function:
+      qd_offset: 0
+
+  problem:
+    height: 16
+    width: 16
+
+trainer:
+  steps: 10000
+  eval_freq: 100
+
+  strategy:
+    popsize: 2
+
+  strategy_params:
+    init_min: -0.1
+    init_max: 0.1
+    clip_min: -1
+    clip_max: 1
+
+callbacks: null  # set to save the training state later
