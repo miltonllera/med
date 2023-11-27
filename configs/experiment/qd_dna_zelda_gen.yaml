@@ -20,9 +20,9 @@ model:
     alphabet_size: 4
 
 task:
-  n_iters: 2
-  popsize: 2
-  n_centroids: 3
+  n_iters: 10
+  popsize: 100
+  n_centroids: 1000
 
   qd_algorithm:
     emitter:
@@ -37,10 +37,10 @@ task:
 
 trainer:
   steps: 10000
-  eval_freq: 100
+  eval_freq: 1
 
   strategy:
-    popsize: 2
+    popsize: 100
 
   strategy_params:
     init_min: -0.1

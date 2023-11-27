@@ -45,7 +45,7 @@ class Trainer(ABC):
             eval_freq = eval_steps
 
         if _scan_steps is None:
-            _scan_steps = 1
+            _scan_steps = eval_freq
 
         self.task = task
         self.steps = steps

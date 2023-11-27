@@ -1,12 +1,11 @@
 from functools import partial
 from itertools import product
+from collections import deque
 from typing import Optional
 
 import numpy as np
 import jax
 import jax.numpy as jnp
-import scipy.sparse as sparse
-from scipy.sparse.csgraph import shortest_path, connected_components
 from jaxtyping import Array, Float
 
 from src.problem.base import QDProblem, Fitness, Descriptor, ExtraScores
@@ -59,24 +58,25 @@ class ZeldaLevelGeneration(QDProblem):
         """
         # TODO: rewrite score and measures to only compute the adjacency matrix once
         n_connected_components = jax.pure_callback(
-            compute_connected_components,
-            jnp.empty((1,)),
+            batched_n_islands,
+            jnp.empty(0),
             inputs,
-            self.score_offset,
-        ).squeeze()
+            vectorized=True,
+        )
+
+        # print(n_connected_components.shape)
+        # jax.debug.print("{}", n_connected_components.shape)
 
         # add max number of connected components to ensure quality scores are positive
         return -n_connected_components + self.score_offset
 
     @partial(jax.jit, static_argnames=("self",))
     def compute_measures(self, inputs: Float[Array, "H W"]) -> Descriptor:
-        max_path, _ = self.descriptor_min_val
-
         path_length = jax.pure_callback(
-            longest_shortest_path,
-            jnp.empty((1,), dtype=jnp.float32),
+            batched_lsp,
+            jnp.empty(0),
             inputs,
-            max_path
+            vectorized=True,  # this will sync across all vmaps up to this point
         )
 
         symmetry = compute_simmetry(inputs, (self.height, self.width))
@@ -85,66 +85,109 @@ class ZeldaLevelGeneration(QDProblem):
 
     @partial(jax.jit, static_argnames=("self",))
     def extra_scores(self, _) -> ExtraScores:
-        return {"dummy": jnp.empty((1,))}
+        return {"dummy": jnp.empty(0)}
 
     def __call__(self, inputs):
-        inputs = inputs.max(axis=0)
+        # Note that because the callbacks above are using vectorization, they will sync over all
+        # vmaps applied. In our case, this should be one for the trainer and one for the task, so
+        # two leading batch dimensions.
+        inputs = inputs.argmax(axis=2)
         return super().__call__(inputs)
 
 
-def compute_connected_components(int_map, max_val, non_traversible_tiles=(0,)):
-    int_map = ~np.isin(int_map, non_traversible_tiles)
+directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
 
-    if not np.any(int_map):  # if there are not valid tiles, return max possible value
-        return max_val
+def batched_n_islands(int_maps):
+    batch_shapes = int_maps.shape[:2]
+    int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
 
-    adj_mat = construct_adj_mat(int_map)
-    n_components = connected_components(
-        adj_mat,
-        directed=False,
-        return_labels=False
-    )
-    return np.asarray([n_components], dtype=np.float32)  # return a numpy array to comply with 'pure_callback'
+    result = np.concatenate([n_islands(im) for im in int_maps])
+
+    return result.reshape(batch_shapes)
+
+def n_islands(int_map: np.ndarray, non_traversible_tiles=(0,)):
+    h, w = int_map.shape
+    int_map = np.isin(int_map, non_traversible_tiles)
+    visited = np.zeros_like(int_map, dtype=bool)
+
+    def in_bounds(pos):
+        return 0 <= pos[0] < h and 0 <= pos[1] < w
+
+    def visit(i, j):
+        to_visit = deque()
+
+        visited[i, j] = True
+        to_visit.append((i, j))
+
+        while len(to_visit) > 0:
+            i, j = to_visit.popleft()
+            for di, dj in directions:
+                nb = i + di, j + dj
+                if in_bounds(nb) and int_map[nb] and not visited[nb]:
+                    to_visit.append(nb)
+                    visited[nb] = True
+
+    n_components = 0
+    for i, j in product(range(h), range(w)):
+        if int_map[i, j] and not visited[i, j]:
+            visit(i, j)
+            n_components += 1
+
+    return np.asarray([n_components], dtype=np.float32)
 
 
-def longest_shortest_path(int_map, max_val, non_traversible_tiles=(0,)):
+def batched_lsp(int_maps):
+    batch_shapes = int_maps.shape[:2]
+    int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
+
+    result = np.concatenate([longest_shortest_path(im) for im in int_maps])
+
+    return result.reshape(batch_shapes)
+
+
+def longest_shortest_path(int_map, non_traversible_tiles=(0,)):
     """
     Use scipy's graph algorithms to compute the longerst shortest path in a map.
 
     By default assumes that the empty tile is 0 and it's the only non-traversable tile. Then it
     creates an adjacency matrix from the integer map.
     """
+    # print("computing shortest path")
+    h, w = int_map.shape
     int_map = ~np.isin(int_map, non_traversible_tiles)
 
-    if not np.any(int_map):  # if there are not valid tiles, return max possible value
-        return max_val
+    def in_bounds(pos):
+        return 0 <= pos[0] < h and 0 <= pos[1] < w
 
-    adj_mat = construct_adj_mat(int_map)
-    all_dist = shortest_path(adj_mat, directed=False, return_predecessors=False).astype(np.float32)
+    def bfs_shortest_path(start_pos):
 
-    return (all_dist[all_dist != np.inf]).max(initial=0)[None]  # comply with expected shape
+        to_visit = deque()
+        to_visit.append(start_pos)
 
+        visited = np.zeros_like(int_map, dtype=bool)
+        visited[start_pos] = True
 
-directions = np.asarray([[1, 0], [0, 1], [-1, 0], [0, -1]])
+        min_dist = np.zeros_like(int_map, dtype=np.float32) + np.inf
+        min_dist[start_pos] = 1
 
-def construct_adj_mat(int_map):
-    height, width = int_map.shape
-    # pad with dummy empty tiles:
-    int_map = np.pad(int_map, ((1, 1),), 'constant', constant_values=0)
+        while len(to_visit) > 0:
+            i, j = to_visit.popleft()
+            for di, dj, in directions:
+                nb = i + di, j + dj
+                if in_bounds(nb) and int_map[nb] and not visited[nb]:
+                    min_dist[nb] = np.minimum(min_dist[nb], min_dist[i, j] + 1)
+                    to_visit.append(nb)
+                    visited[nb] = True
 
-    adj = []
-    for (i, j) in product(range(1, height + 1), range(1, width + 1)):
-        if int_map[i, j] != 0:
-            neighbors = np.asarray([[i, j]]) + directions
-            for (k, l) in neighbors:
-                if int_map[k, l] != 0:
-                    adj.append([(i - 1) * width + (j - 1), (k - 1) * width + (l - 1), 1])
+        return min_dist
 
-    adj = np.asarray(adj)
-    shape = tuple(adj.max(initial=0, axis=0)[:2] + 1)
-    coo = sparse.coo_matrix((adj[:, 2], (adj[:, 0], adj[:, 1])), shape=shape, dtype=adj.dtype)
+    max_path = np.inf
 
-    return coo.tocsr()
+    for start_pos in product(range(h), range(w)):
+        min_paths = bfs_shortest_path(start_pos)
+        max_path = max((min_paths * (min_paths != np.inf)).max(), max_path)
+
+    return np.asarray([max_path], dtype=np.float32)
 
 
 def compute_simmetry(int_map, env_shape):

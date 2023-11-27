@@ -6,7 +6,7 @@ _target_: src.model.nca.nca_dna_sampler_pair
 nca:
   _target_: src.model.nca.NCA
 
-  dev_steps: 1
+  dev_steps: 2
   state_size: 16
   grid_size: ???  # set in each experiment
   update_prob: 0.5
@@ -29,8 +29,8 @@ nca:
 
   alive_fn:
     _target_: src.nn.ca.MaxPoolAlive
-    alive_threshold: 0.1
-    alive_bit: 1  # Alive means that the tile is enabled for traversal. (I DON'T KNOW IF THIS IS A GOOD IDEA!!!!!)
+    alive_threshold: 0.5
+    alive_bit: 1  # Alive means that the tile is enabled for traversal. (I DON'T KNOW IF THIS IS A GOOD IDEA!!!)
 
   message_fn:
     _target_: src.nn.ca.IdentityAndSobelFilter

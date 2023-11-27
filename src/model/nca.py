@@ -20,7 +20,6 @@ class NCA(DevelopmentalModel):
     any function that rearranges the dimensions internally must reverse this process when returning
     the results back to the NCA class.
     """
-    # functions
     state_size: int
     grid_size: Tuple[int, int]
     alive_fn: Callable
