@@ -77,34 +77,26 @@ class DNAQDSearch(Task):
     def predict(self, model_and_dna, centroids, key):
         model, dna_distribution = model_and_dna
 
+        @jax.vmap
         def _eval(genotype, key):
             output, _ = model(genotype, key)
             return self.problem(output)
-
-        # def _eval(genotypes, key):
-        #     output, _  = jax.vmap(model)(genotypes, jr.split(key, self.popsize))
-        #     return self.problem(output)
 
         # Create the ME initial state
         dna_sample_key, score_init_key, mpe_key = jr.split(key, 3)
 
         dnas = dna_distribution(self.popsize, key=dna_sample_key).reshape(self.popsize, -1)
 
-        scores = jax.vmap(_eval)(dnas, jr.split(score_init_key, self.popsize))
-        # scores = _eval(dnas, score_init_key)
+        scores = _eval(dnas, jr.split(score_init_key, self.popsize))
 
         mpe_state = self.qd_algorithm.init(dnas, centroids, scores, mpe_key)
 
         def step_fn(carry, _):
             mpe_state, key = carry
-
             eval_key, next_key = jr.split(key, 2)
 
             dnas = self.qd_algorithm.ask(mpe_state)
-
-            # scores = jax.vmap(_eval)(dnas, jr.split(eval_key, self.popsize))
-            scores = _eval(dnas, eval_key)
-
+            scores = _eval(dnas, jr.split(eval_key, self.popsize))
             mpe_state, metrics = self.qd_algorithm.tell(dnas, scores, mpe_state)  # type: ignore
 
             return (mpe_state, next_key), (scores, metrics)

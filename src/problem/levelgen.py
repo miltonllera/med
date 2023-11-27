@@ -11,6 +11,9 @@ from jaxtyping import Array, Float
 from src.problem.base import QDProblem, Fitness, Descriptor, ExtraScores
 
 
+MAX_VALUE = np.finfo(np.float32).max
+
+
 class ZeldaLevelGeneration(QDProblem):
     def __init__(
         self,
@@ -59,10 +62,10 @@ class ZeldaLevelGeneration(QDProblem):
         # TODO: rewrite score and measures to only compute the adjacency matrix once
         n_connected_components = jax.pure_callback(
             batched_n_islands,
-            jnp.empty(0),
+            jnp.empty((1,)),
             inputs,
             vectorized=True,
-        )
+        ).squeeze()
 
         # print(n_connected_components.shape)
         # jax.debug.print("{}", n_connected_components.shape)
@@ -74,7 +77,7 @@ class ZeldaLevelGeneration(QDProblem):
     def compute_measures(self, inputs: Float[Array, "H W"]) -> Descriptor:
         path_length = jax.pure_callback(
             batched_lsp,
-            jnp.empty(0),
+            jnp.empty((1,)),
             inputs,
             vectorized=True,  # this will sync across all vmaps up to this point
         )
@@ -103,7 +106,8 @@ def batched_n_islands(int_maps):
 
     result = np.concatenate([n_islands(im) for im in int_maps])
 
-    return result.reshape(batch_shapes)
+    return result.reshape(batch_shapes)[..., None]
+
 
 def n_islands(int_map: np.ndarray, non_traversible_tiles=(0,)):
     h, w = int_map.shape
@@ -142,7 +146,7 @@ def batched_lsp(int_maps):
 
     result = np.concatenate([longest_shortest_path(im) for im in int_maps])
 
-    return result.reshape(batch_shapes)
+    return result.reshape(batch_shapes)[..., None]
 
 
 def longest_shortest_path(int_map, non_traversible_tiles=(0,)):
@@ -167,7 +171,7 @@ def longest_shortest_path(int_map, non_traversible_tiles=(0,)):
         visited = np.zeros_like(int_map, dtype=bool)
         visited[start_pos] = True
 
-        min_dist = np.zeros_like(int_map, dtype=np.float32) + np.inf
+        min_dist = np.zeros_like(int_map, dtype=np.float32) + MAX_VALUE
         min_dist[start_pos] = 1
 
         while len(to_visit) > 0:
@@ -181,11 +185,11 @@ def longest_shortest_path(int_map, non_traversible_tiles=(0,)):
 
         return min_dist
 
-    max_path = np.inf
+    max_path = -MAX_VALUE
 
     for start_pos in product(range(h), range(w)):
         min_paths = bfs_shortest_path(start_pos)
-        max_path = max((min_paths * (min_paths != np.inf)).max(), max_path)
+        max_path = max((min_paths * (min_paths != MAX_VALUE)).max(), max_path)
 
     return np.asarray([max_path], dtype=np.float32)
 
