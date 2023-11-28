@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -75,12 +75,16 @@ class DNAContext(eqx.Module):
         self,
         state_size: int,
         dna_emb_size: int,
-        output_size: int,
-        n_heads: int,
+        output_size: Optional[int] = None,
+        n_heads: int = 1,
+        *,
         key: jr.KeyArray
     ):
+        if output_size is None:
+            output_size = state_size
+
         self.attention = nn.MultiheadAttention(
-            n_heads, state_size, dna_emb_size, dna_emb_size, output_size, state_size, key=key
+            n_heads, state_size, dna_emb_size, dna_emb_size, output_size, key=key
         )
 
     def __call__(

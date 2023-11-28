@@ -10,6 +10,12 @@ from jaxtyping import Array, Float
 
 #----------------------------------- Alive Functions ------------------------------------
 
+class IdentityAlive(eqx.Module):
+    def __call__(self, node_states: Float[Array, "C H W"]):
+        H, W = node_states.shape[1:]
+        return jnp.ones_like(node_states, shape=(1, H, W), dtype=jnp.bool_)
+
+
 class MaxPoolAlive(eqx.Module):
     alive_bit: int
     alive_threshold: float

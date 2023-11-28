@@ -14,4 +14,4 @@ emitter:
 metrics_function:
   _target_: qdax.utils.metrics.default_qd_metrics
   _partial_: True
-  qd_offset: ???  # this is problem dependant. should be set so that qd scores are positive
+  qd_offset: 0  # this is problem dependant. should be set so that qd scores are positive

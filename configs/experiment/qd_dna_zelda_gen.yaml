@@ -28,16 +28,14 @@ task:
     emitter:
       batch_size: ${task.popsize}
 
-    metrics_function:
-      qd_offset: 0
-
   problem:
     height: 16
     width: 16
 
 trainer:
   steps: 10000
-  eval_freq: 1
+  eval_freq: 100
+  eval_steps: 1
 
   strategy:
     popsize: 100
