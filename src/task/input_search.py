@@ -92,8 +92,10 @@ class DNAQDSearch(Task):
         mpe_state = self.qd_algorithm.init(dnas, centroids, scores, mpe_key)
 
         def step_fn(carry, _):
+            # jax.debug.print("map-elite iteration: {}", i)
+
             mpe_state, key = carry
-            eval_key, next_key = jr.split(key, 2)
+            eval_key, next_key = jr.split(key)
 
             dnas = self.qd_algorithm.ask(mpe_state)
             scores = _eval(dnas, jr.split(eval_key, self.popsize))

@@ -1,3 +1,6 @@
+import multiprocessing as mp
+import time
+
 from functools import partial
 from itertools import product
 from collections import deque
@@ -12,7 +15,7 @@ from src.problem.base import QDProblem, Fitness, Descriptor, ExtraScores
 
 
 MAX_VALUE = np.finfo(np.float32).max
-
+N_CPUS = mp.cpu_count()
 
 class ZeldaLevelGeneration(QDProblem):
     def __init__(
@@ -104,7 +107,20 @@ def batched_n_islands(int_maps):
     batch_shapes = int_maps.shape[:2]
     int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
 
-    result = np.concatenate([n_islands(im) for im in int_maps])
+    # print("Multi-processing now")
+    # t0 = time.time()
+
+    with mp.Pool(N_CPUS - 1) as pool:
+        result = pool.imap(n_islands, int_maps, int(np.ceil(len(int_maps) / N_CPUS)))
+        result = list(result)
+
+    # result = np.concatenate([n_islands(im) for im in int_maps])
+
+    # t1 = time.time()
+    # total = t1-t0
+    # print(f"Done: {total}")
+
+    result = np.concatenate(result)
 
     return result.reshape(batch_shapes)[..., None]
 
@@ -144,7 +160,20 @@ def batched_lsp(int_maps):
     batch_shapes = int_maps.shape[:2]
     int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
 
-    result = np.concatenate([longest_shortest_path(im) for im in int_maps])
+    # print("Multi-processing now")
+    # t0 = time.time()
+
+    with mp.Pool(N_CPUS - 1) as pool:
+        result = pool.imap(longest_shortest_path, int_maps, int(np.ceil(len(int_maps) / N_CPUS)))
+        result = list(result)
+
+    # result = np.concatenate([longest_shortest_path(im) for im in int_maps])
+
+    # t1 = time.time()
+    # total = t1-t0
+    # print(f"Done: {total}")
+
+    result = np.concatenate(result)
 
     return result.reshape(batch_shapes)[..., None]
 

@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, Float
+from tqdm import tqdm
 
 
 TENSOR = Float[Array, "..."]
@@ -23,7 +24,7 @@ def tree_unstack(tree):
 def loop(step_fn, state, n_iters):
     accumulated_results = []
 
-    for i in range(n_iters):
+    for i in tqdm(range(n_iters)):
         state, results = step_fn(state, i)
         accumulated_results.append(results)
 
