@@ -102,13 +102,13 @@ class EvoTrainer(Trainer):
 
             params, _ = strategy.ask(ask_key, es_state, strategy_params)
 
-            metrics, task_state = jax.vmap(_validation_fn, in_axes=(0, None, None))(
+            results, task_state = jax.vmap(_validation_fn, in_axes=(0, None, None))(
                 params, task_state, val_key
             )
 
             task_state = jtu.tree_map(lambda x: x[0], task_state)
 
-            return (es_state, task_state, key), metrics
+            return (es_state, task_state, key), results
 
         trainer_state = self._fit_loop(
             model,
@@ -150,16 +150,16 @@ class EvoTrainer(Trainer):
         if stage in "train":
             strat_key, task_key, loop_key = jr.split(key, 3)
             es_state = strategy.initialize(strat_key, strategy_params)
-            task_state = self.task.init("train", task_key)
+            task_state = self.task.init("train", None, task_key)
             state = es_state, task_state, loop_key
 
         elif stage == "val":
             if trainer_state is None:
                 raise ValueError
 
-            es_state = trainer_state[0]
+            es_state, trainer_task_state = trainer_state[:2]
             task_key, loop_key = jr.split(key)
-            task_state = self.task.init("val", task_key)
+            task_state = self.task.init("val", trainer_task_state, task_key)
 
             state = es_state, task_state, loop_key
 
@@ -206,6 +206,7 @@ class EvoTrainer(Trainer):
                 f"{k}_mean": jnp.mean(v).item(),
                 f"{k}_var": jnp.var(v).item(),
             })
+
         return metrics_dict
 
     def get_best_model(self, state, strategy):

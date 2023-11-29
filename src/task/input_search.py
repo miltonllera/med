@@ -1,11 +1,11 @@
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import equinox as eqx
 import optax
-from jaxtyping import PyTree
+from jaxtyping import PyTree, ArrayLike
 from qdax.core.containers.mapelites_repertoire import compute_cvt_centroids
 
 from src.task.base import Task, MetricCollection
@@ -22,7 +22,7 @@ SCORING_FN = Callable[[Any, jr.KeyArray], Tuple]
 QD_ALGORITHM = MAPElites  # Use Union to add more algorithms later
 
 
-class DNAQDSearch(Task):
+class QDSearchDNA(Task):
     """
     Search over possible DNA sequences that guide the rollout of a developmental model. Note that
     unlike other tasks, the models here must be able to provide a set of DNAs (this can be a fixed
@@ -43,6 +43,7 @@ class DNAQDSearch(Task):
         popsize,
         n_centroids=1000,
         n_centroid_samples=None,
+        score_to_coverage_ratio: float = 1.0,
     ) -> None:
         if n_centroid_samples is None:
             n_centroid_samples = problem.descriptor_length * n_centroids
@@ -53,10 +54,13 @@ class DNAQDSearch(Task):
         self.popsize = popsize
         self.n_centroids = n_centroids
         self.n_centroid_samples = n_centroid_samples
+        self.score_to_coverage_ratio = score_to_coverage_ratio
 
     # @jit_method
-    def init(self, _, key):
-        return self.init_centroids(key)
+    def init(self, stage, training_state, key):
+        if stage == "train":
+            return self.init_centroids(key)
+        return training_state  # just return the centroids we used for initalization
 
     @jax_partial
     def eval(
@@ -66,12 +70,35 @@ class DNAQDSearch(Task):
         key
     ):
         (_, metrics), _ = self.predict(model_and_dna, centroids, key)  # type: ignore
+
         qd_score = metrics['qd_score'][-1]
-        return qd_score, centroids
+        coverage = metrics['coverage'][-1]
+
+        total_score = self.score_to_coverage_ratio * qd_score + coverage
+
+        return total_score, centroids
 
     @jax_partial
-    def validate(self, model, state, key):
-        return self.eval(model, state, key=key)  # type: ignore
+    def validate(
+        self,
+        model_and_dna,
+        centroids,
+        key
+    ):
+        (_, metrics), (mpe_state, _) = self.predict(
+            model_and_dna, centroids, key
+        ) # type: ignore
+        qd_score = metrics['qd_score'][-1]
+        coverage = metrics['coverage'][-1]
+        total_score = self.score_to_coverage_ratio * qd_score + coverage
+        metrics['loss'] = total_score
+
+        bd_limits = (self.problem.descriptor_min_val, self.problem.descriptor_max_val)
+        repertoire = mpe_state[0]
+
+        extra_results = (repertoire, bd_limits)
+
+        return (metrics, extra_results), centroids
 
     @jax_partial
     def predict(self, model_and_dna, centroids, key):
@@ -122,6 +149,9 @@ class DNAQDSearch(Task):
         )
 
         return centroids
+
+    def aggregate_metrics(self, metric_values: Dict[str, ArrayLike]):
+        return metric_values
 
 
 class InputOptimization(Task):
@@ -209,12 +239,12 @@ class InputOptimization(Task):
         (inputs, goals), _ = state
         batched_keys = jr.split(key, len(inputs))
 
-        pred = jax.vmap(model )(inputs, batched_keys)
+        pred = jax.vmap(model)(inputs, batched_keys)
         pred, goals = self.prepare_batch(pred, goals)
 
         metrics = self.metrics.compute(pred, goals)
 
-        return metrics, state
+        return (metrics, pred), state  # No extra results here
 
     @jax_partial
     def predict(

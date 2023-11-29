@@ -3,7 +3,7 @@
 defaults:
   - /problem@task.problem: zelda_levelgen
   - /strategy@trainer.strategy: cmaes
-  - /callbacks@callbacks.growth_viz: growth_viz
+  # - /callbacks@callbacks.viz_mpe_repertoire: viz_mpe_repertoire
   - override /trainer: evo
   - override /model: nca_dna
   - override /task: dna_qd
@@ -14,6 +14,7 @@ tags: ["qd", "zelda", "nca_dna", "evo"]
 
 model:
   nca:
+    dev_steps: 50
     grid_size: ["${task.problem.height}", "${task.problem.width}"]
   dna_sampler:
     sequence_length: 8
@@ -46,4 +47,9 @@ trainer:
     clip_min: -1
     clip_max: 1
 
-callbacks: null  # set to save the training state later
+callbacks:
+  model_checkpoint:
+    monitor_key: val/loss_mean
+  # viz_mpe_repertoire:
+  #   n_iters: ${task.n_iters}
+  #   save_dir: ${paths.output_dir}/visualizations

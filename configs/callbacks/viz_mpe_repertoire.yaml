@@ -1,0 +1,4 @@
+_target_: src.trainer.callback.QDMapVisualizer
+n_iters: ???
+save_dir: ???
+save_prefix: ""

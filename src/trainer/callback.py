@@ -3,8 +3,13 @@ import os.path as osp
 from typing import Any, Callable, Optional, Union
 
 import numpy as np
+import jax.numpy as jnp
+import jax.tree_util as jtu
+import matplotlib.pyplot as plt
 import equinox as eqx
 import optax
+from qdax.utils.plotting import plot_2d_map_elites_repertoire as _plot_2d_repertoire
+# from jaxtyping import ArrayLike
 
 
 class Callback:
@@ -91,7 +96,7 @@ class MonitorCheckpoint(Checkpoint):
     def best_state(self):
         return self._ckpt_state
 
-    def validation_end(self, iter, metric, state) -> Any:
+    def validation_end(self, iter, metric, _, state) -> Any:
         state = self.state_getter(state)
 
         if self.monitor_key is not None:
@@ -150,6 +155,57 @@ class VisualizationCallback(Callback):
 
     # def validation_end(self, iter, metric, state) -> Any:
     #     model = state[0].best_member
+
+
+class QDMapVisualizer(Callback):
+    def __init__(self, n_iters: int, save_dir: str, save_prefix: str = "") -> None:
+        super().__init__()
+        self.n_iters = n_iters
+        self.save_dir = save_dir
+        self.save_prefix = save_prefix
+        os.makedirs(save_dir, exist_ok=True)
+
+    def validation_end(self, iter, metrics, extra_results, _) -> Any:
+        # Note: ignore the metrics in the function signature, those are averaged. We have to
+        # select one repertoire and it's corresponding metrics to plot. Right now I am just
+        # selecting the first one (of the last validation step), but this should be something
+        # like median, min and max.
+        repertoire, bd_limits = extra_results
+
+        repertoire = jtu.tree_map(lambda x: x[-1][0], repertoire)
+        # metrics = jtu.tree_map(lambda x: x[-1][0], metrics)
+        bd_limits = jtu.tree_map(lambda x: x[-1][0], bd_limits)  # limits is also repeated...
+
+        qd_steps = jnp.arange(self.n_iters)
+
+        fig, _ = plot_2d_repertoire(
+            repertoire,
+            *bd_limits
+        )
+
+        if self.save_prefix == "":
+            file_name = f"repertoire_iter-{iter}"
+        else:
+            file_name = f"{self.save_prefix}_repertoire-{iter}"
+
+        save_file = osp.join(self.save_dir, file_name)
+        fig.savefig(save_file)
+
+
+def plot_2d_repertoire(repertoire, min_bd, max_bd):
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    _, ax = _plot_2d_repertoire(
+        centroids=repertoire.centroids,
+        repertoire_fitnesses=repertoire.fitnesses,
+        minval=min_bd,
+        maxval=max_bd,
+        repertoire_descriptors=repertoire.descriptors,
+        ax=ax
+    )
+
+    return fig, ax
+
 
 def save_pytree(model: eqx.Module, save_folder: str, save_name: str):
     save_file = osp.join(save_folder, f"{save_name}.eqx")

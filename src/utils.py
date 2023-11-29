@@ -1,3 +1,4 @@
+from time import time
 from abc import ABC, abstractmethod
 from functools import partial, wraps
 from typing import Any, Callable
@@ -68,3 +69,14 @@ class StateIndexer(ABC):
     @abstractmethod
     def __call__(self, trainer_state) -> Any:
         raise NotImplementedError
+
+
+class SnippetTimer:
+    def __init__(self):
+        self.start_time = 0
+
+    def __enter__(self):
+        self.start_time = time()
+
+    def __exit__(self):
+        print(f"Total time taken: {time() - self.start_time}")

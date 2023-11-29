@@ -52,7 +52,7 @@ class Task(ABC):
     metrics: MetricCollection
 
     @abstractmethod
-    def init(self, stage, key):
+    def init(self, stage, state, key):
         raise NotImplementedError
 
     @abstractmethod
@@ -66,3 +66,6 @@ class Task(ABC):
     @abstractmethod
     def predict(self, model, state, key):
         raise NotImplementedError
+
+    def aggregate_metrics(self, metric_values):
+        return self.metrics.aggregate(metric_values)

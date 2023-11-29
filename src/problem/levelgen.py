@@ -1,5 +1,4 @@
 import multiprocessing as mp
-import time
 
 from functools import partial
 from itertools import product
@@ -47,7 +46,7 @@ class ZeldaLevelGeneration(QDProblem):
     @property
     def descriptor_max_val(self):
         # maximum path lengthl, maximum symmetry score
-        return self.height * self.width / 2, self.height * self.width
+        return self.height * self.width / 2 + self.width, self.height * self.width
 
     @property
     def score_offset(self):
@@ -60,7 +59,8 @@ class ZeldaLevelGeneration(QDProblem):
         Computes the validity of a level by assigning a value to how well it satisfies a given set
         of constraints. This is a continuos value to allow the model to explore outside the space
         of satisfying solutions. Notice that there is no ``optimal'' level, just levels that do or
-        do not satisfy the constraints.
+        do not satisfy the constraints, though any given level can certainly be further away from
+        satisfying said constraint than other levels.
         """
         # TODO: rewrite score and measures to only compute the adjacency matrix once
         n_connected_components = jax.pure_callback(
@@ -69,9 +69,6 @@ class ZeldaLevelGeneration(QDProblem):
             inputs,
             vectorized=True,
         ).squeeze()
-
-        # print(n_connected_components.shape)
-        # jax.debug.print("{}", n_connected_components.shape)
 
         # add max number of connected components to ensure quality scores are positive
         return -n_connected_components + self.score_offset
@@ -107,18 +104,10 @@ def batched_n_islands(int_maps):
     batch_shapes = int_maps.shape[:2]
     int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
 
-    # print("Multi-processing now")
-    # t0 = time.time()
-
+    # with SnippetTimer() as st:
     with mp.Pool(N_CPUS - 1) as pool:
         result = pool.imap(n_islands, int_maps, int(np.ceil(len(int_maps) / N_CPUS)))
         result = list(result)
-
-    # result = np.concatenate([n_islands(im) for im in int_maps])
-
-    # t1 = time.time()
-    # total = t1-t0
-    # print(f"Done: {total}")
 
     result = np.concatenate(result)
 
@@ -160,18 +149,10 @@ def batched_lsp(int_maps):
     batch_shapes = int_maps.shape[:2]
     int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
 
-    # print("Multi-processing now")
-    # t0 = time.time()
-
+    # with SnippetTimer() as st:
     with mp.Pool(N_CPUS - 1) as pool:
         result = pool.imap(longest_shortest_path, int_maps, int(np.ceil(len(int_maps) / N_CPUS)))
         result = list(result)
-
-    # result = np.concatenate([longest_shortest_path(im) for im in int_maps])
-
-    # t1 = time.time()
-    # total = t1-t0
-    # print(f"Done: {total}")
 
     result = np.concatenate(result)
 
@@ -185,7 +166,6 @@ def longest_shortest_path(int_map, non_traversible_tiles=(0,)):
     By default assumes that the empty tile is 0 and it's the only non-traversable tile. Then it
     creates an adjacency matrix from the integer map.
     """
-    # print("computing shortest path")
     h, w = int_map.shape
     int_map = ~np.isin(int_map, non_traversible_tiles)
 

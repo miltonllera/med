@@ -96,6 +96,7 @@ class Trainer(ABC):
             # training_state, fitness_or_loss = jax.lax.scan(
             #     step_fn, training_state, jnp.arange(self._scan_steps)
             # )
+
             training_state, fitness_or_loss = loop(
                 step_fn, training_state, self._scan_steps
             )
@@ -110,14 +111,18 @@ class Trainer(ABC):
                     "val", model, training_state, key=init_val_key, **kwargs
                 )
 
-                validation_state, validation_metrics = jax.lax.scan(
-                    val_step_fn, validation_state, jnp.arange(self.eval_steps)
+                # validation_state, validation_metrics = jax.lax.scan(
+                #     val_step_fn, validation_state, jnp.arange(self.eval_steps)
+                # )
+
+                validation_state, (validation_metrics, extra_results) = loop(
+                    val_step_fn, validation_state, self.eval_steps
                 )
 
                 validation_metrics = self.format_metrics("val", validation_metrics)
 
                 self.validation_end(
-                    (i + 1) * self._scan_steps, validation_metrics, validation_state
+                    (i + 1) * self._scan_steps, validation_metrics, extra_results, validation_state
                 )
 
         self.train_end(n_loops * self._scan_steps, training_state)
@@ -147,7 +152,7 @@ class Trainer(ABC):
         """
         This method just adds the stage of evaluation in front of the metric names
         """
-        metrics_dict = self.task.metrics.aggregate(metric_values)
+        metrics_dict = self.task.aggregate_metrics(metric_values)
         return {f"{stage}/{k}": v for (k, v) in metrics_dict.items()}
 
     def train_loop_end(self, iteration, fitness_or_loss, state):
@@ -155,9 +160,9 @@ class Trainer(ABC):
         self.run_loggers('log_dict', fitness_or_loss, steps)
         self.run_callbacks("train_loop_end", steps, fitness_or_loss, state)
 
-    def validation_end(self, iteration, metrics, state):
+    def validation_end(self, iteration, metrics, extra_results, state):
         self.run_loggers('log_dict', metrics, iteration)
-        self.run_callbacks("validation_end", iteration, metrics, state)
+        self.run_callbacks("validation_end", iteration, metrics, extra_results, state)
 
     def train_end(self, iteration, state):
         self.run_callbacks("train_end", iteration, state)

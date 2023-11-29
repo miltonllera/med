@@ -82,7 +82,7 @@ class SupervisedTask(Task):
         (pred, y), state = self.predict(model, state, key)
         pred, y = self.prepare_batch(pred, y)
         metrics = self.metrics.compute(pred, y)
-        return metrics, state
+        return (metrics, pred), state
 
     @jit_method
     def predict(
