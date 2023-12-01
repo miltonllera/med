@@ -8,8 +8,8 @@ import jax.tree_util as jtu
 import matplotlib.pyplot as plt
 import equinox as eqx
 import optax
-from qdax.utils.plotting import plot_2d_map_elites_repertoire as _plot_2d_repertoire
-# from jaxtyping import ArrayLike
+
+from src.analysis.visualization import plot_2d_repertoire
 
 
 class Callback:
@@ -176,8 +176,6 @@ class QDMapVisualizer(Callback):
         # metrics = jtu.tree_map(lambda x: x[-1][0], metrics)
         bd_limits = jtu.tree_map(lambda x: x[-1][0], bd_limits)  # limits is also repeated...
 
-        qd_steps = jnp.arange(self.n_iters)
-
         fig, _ = plot_2d_repertoire(
             repertoire,
             *bd_limits
@@ -192,19 +190,8 @@ class QDMapVisualizer(Callback):
         fig.savefig(save_file)
 
 
-def plot_2d_repertoire(repertoire, min_bd, max_bd):
-    fig, ax = plt.subplots(figsize=(10, 10))
+# class MapPlotter(Callback):
 
-    _, ax = _plot_2d_repertoire(
-        centroids=repertoire.centroids,
-        repertoire_fitnesses=repertoire.fitnesses,
-        minval=min_bd,
-        maxval=max_bd,
-        repertoire_descriptors=repertoire.descriptors,
-        ax=ax
-    )
-
-    return fig, ax
 
 
 def save_pytree(model: eqx.Module, save_folder: str, save_name: str):

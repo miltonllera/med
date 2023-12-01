@@ -46,11 +46,13 @@ class ZeldaLevelGeneration(QDProblem):
     @property
     def descriptor_max_val(self):
         # maximum path lengthl, maximum symmetry score
-        return self.height * self.width / 2 + self.width, self.height * self.width
+        return self.height * self.width / 2 + self.width, 1.0
 
     @property
     def score_offset(self):
-        # maximum number of connected components + 100 for when there are no valid tiles
+        # Maximum number of connected components is H * W / 2 when there is a checkerboard pattern.
+        # To make it clear that maps with no paths are really bad, we will set the score of an
+        # empty map to - H * W and the offset to the opposit evalue. Such maps get a score of 0
         return self.height * self.width
 
     @partial(jax.jit, static_argnames=("self",))
@@ -116,7 +118,12 @@ def batched_n_islands(int_maps):
 
 def n_islands(int_map: np.ndarray, non_traversible_tiles=(0,)):
     h, w = int_map.shape
+
     int_map = np.isin(int_map, non_traversible_tiles)
+
+    if np.all(int_map == 0):
+        return np.asarray([h * w], dtype=np.float32)
+
     visited = np.zeros_like(int_map, dtype=bool)
 
     def in_bounds(pos):

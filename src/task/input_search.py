@@ -90,8 +90,9 @@ class QDSearchDNA(Task):
         ) # type: ignore
         qd_score = metrics['qd_score'][-1]
         coverage = metrics['coverage'][-1]
+
         total_score = self.score_to_coverage_ratio * qd_score + coverage
-        metrics['loss'] = total_score
+        metrics['fitness'] = total_score
 
         bd_limits = (self.problem.descriptor_min_val, self.problem.descriptor_max_val)
         repertoire = mpe_state[0]

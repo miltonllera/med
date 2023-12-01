@@ -185,11 +185,16 @@ class EvoTrainer(Trainer):
     def format_training_resutls(self, fitness_or_loss):
         # Unlike backprop training, 'fitness_or_loss' is over a population instead of a single
         # set of parameters. We thus convert it to several quantities of interest:
+        if self.strategy.fitness_shaper.maximize:
+            key = "fitness"
+        else:
+            key = "loss"
+
         return {
-            'train/loss_min': jnp.min(fitness_or_loss, axis=1),  # currently hardcoded for minimization
-            'train/loss_max': jnp.max(fitness_or_loss, axis=1),  # currently hardcoded for minimization
-            'train/loss_mean': jnp.mean(fitness_or_loss, axis=1),
-            'train/loss_var': jnp.var(fitness_or_loss, axis=1)
+            f'train/{key}_min': jnp.min(fitness_or_loss, axis=1),  # currently hardcoded for minimization
+            f'train/{key}_max': jnp.max(fitness_or_loss, axis=1),  # currently hardcoded for minimization
+            f'train/{key}_mean': jnp.mean(fitness_or_loss, axis=1),
+            f'train/{key}_var': jnp.var(fitness_or_loss, axis=1)
         }
 
     def format_metrics(self, stage, metrics):

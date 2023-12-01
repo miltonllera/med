@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, Float
+from qdax.utils.plotting import plot_2d_map_elites_repertoire as _plot_2d_repertoire
 
 from src.dataset.base import DataModule
 
@@ -87,6 +88,21 @@ def generate_growth_gif(frames: np.ndarray):
         return im,
 
     return FuncAnimation(fig, animate, interval=200, blit=True, repeat=True, frames=len(frames))
+
+
+def plot_2d_repertoire(repertoire, min_bd, max_bd):
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    _, ax = _plot_2d_repertoire(
+        centroids=repertoire.centroids,
+        repertoire_fitnesses=repertoire.fitnesses,
+        minval=min_bd,
+        maxval=max_bd,
+        repertoire_descriptors=repertoire.descriptors,
+        ax=ax
+    )
+
+    return fig, ax
 
 
 def strip(ax):

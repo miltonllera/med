@@ -3,7 +3,7 @@
 defaults:
   - /problem@task.problem: zelda_levelgen
   - /strategy@trainer.strategy: cmaes
-  # - /callbacks@callbacks.viz_mpe_repertoire: viz_mpe_repertoire
+  - /callbacks@callbacks.viz_mpe_repertoire: viz_mpe_repertoire
   - override /trainer: evo
   - override /model: nca_dna
   - override /task: dna_qd
@@ -40,6 +40,7 @@ trainer:
 
   strategy:
     popsize: 100
+    maximize: True
 
   strategy_params:
     init_min: -0.1
@@ -50,6 +51,6 @@ trainer:
 callbacks:
   model_checkpoint:
     monitor_key: val/loss_mean
-  # viz_mpe_repertoire:
-  #   n_iters: ${task.n_iters}
-  #   save_dir: ${paths.output_dir}/visualizations
+  viz_mpe_repertoire:
+    n_iters: ${task.n_iters}
+    save_dir: ${paths.output_dir}/visualizations
