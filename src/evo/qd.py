@@ -106,6 +106,3 @@ class MAPElites(BaseME):
         metrics = self._metrics_function(repertoire)
 
         return (repertoire, emitter_state, key), metrics
-
-
-# def compute_qd_aggregate(

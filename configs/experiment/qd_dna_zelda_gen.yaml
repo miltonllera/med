@@ -50,7 +50,7 @@ trainer:
 
 callbacks:
   model_checkpoint:
-    monitor_key: val/loss_mean
+    monitor_key: val/fitness_mean
   viz_mpe_repertoire:
     n_iters: ${task.n_iters}
     save_dir: ${paths.output_dir}/visualizations

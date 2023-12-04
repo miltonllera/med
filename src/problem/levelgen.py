@@ -46,7 +46,7 @@ class ZeldaLevelGeneration(QDProblem):
     @property
     def descriptor_max_val(self):
         # maximum path lengthl, maximum symmetry score
-        return self.height * self.width / 2 + self.width, 1.0
+        return self.height * self.width / 2 + self.width, self.height * self.width
 
     @property
     def score_offset(self):
@@ -229,17 +229,17 @@ def compute_horizontal_symmetry(int_map, env_shape):
     env (gym-pcgrl environment instance): used to get the action space dims
     returns a symmetry float value normalized to a range of 0.0 to 1.0
     """
-    max_val = env_shape[0] * env_shape[1] / 2  # for example 14*14/2=98
+    # max_val = env_shape[0] * env_shape[1] / 2  # for example 14*14/2=98
     m = 0
 
     if (int_map.shape[0] % 2) == 0:
         m = jnp.sum(
             int_map[: int_map.shape[0] // 2] == jnp.flip(int_map[int_map.shape[0] // 2 :], 0)
-        ) / max_val
+        )
     else:
         m = jnp.sum(
             int_map[: int_map.shape[0] // 2] == jnp.flip(int_map[int_map.shape[0] // 2 + 1 :], 0)
-        ) / max_val
+        )
 
     return m
 
@@ -251,16 +251,16 @@ def compute_vertical_symmetry(int_map, env_shape):
     env (gym-pcgrl environment instance): used to get the action space dims
     returns a symmetry float value normalized to a range of 0.0 to 1.0
     """
-    max_val = env_shape[0] * env_shape[1] / 2
+    # max_val = env_shape[0] * env_shape[1] / 2
     m = 0
 
     if (int_map.shape[1] % 2) == 0:
         m = jnp.sum(
             int_map[:, : int_map.shape[1] // 2] == jnp.flip(int_map[:, int_map.shape[1] // 2 :], 1)
-        ) / max_val
+        )
     else:
         m = jnp.sum(
             int_map[:, : int_map.shape[1] // 2] == jnp.flip(int_map[:, int_map.shape[1] // 2 + 1 :], 1)
-        ) / max_val
+        )
 
     return m

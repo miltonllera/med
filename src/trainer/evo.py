@@ -68,6 +68,7 @@ class EvoTrainer(Trainer):
                 fits = jax.vmap(_eval_fn, in_axes=(None, None, 0))(
                     params, task_state, key=jr.split(key, self.n_repeats)
                 ) #(nrep, pop)"
+
                 return jnp.mean(fits, axis=0) #(pop,)
         else:
             eval_fn = _eval_fn
@@ -185,7 +186,7 @@ class EvoTrainer(Trainer):
     def format_training_resutls(self, fitness_or_loss):
         # Unlike backprop training, 'fitness_or_loss' is over a population instead of a single
         # set of parameters. We thus convert it to several quantities of interest:
-        if self.strategy.fitness_shaper.maximize:
+        if self.task.mode == "max":
             key = "fitness"
         else:
             key = "loss"

@@ -102,6 +102,8 @@ def plot_2d_repertoire(repertoire, min_bd, max_bd):
         ax=ax
     )
 
+    ax.set_aspect("auto")
+
     return fig, ax
 
 

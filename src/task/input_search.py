@@ -4,12 +4,12 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 import equinox as eqx
-import optax
+# import optax
 from jaxtyping import PyTree, ArrayLike
 from qdax.core.containers.mapelites_repertoire import compute_cvt_centroids
 
-from src.task.base import Task, MetricCollection
-from src.dataset.base import DataModule
+from src.task.base import Task
+# from src.dataset.base import DataModule
 from src.model.base import FunctionalModel
 from src.nn.dna import DNADistribution
 from src.evo.qd import MAPElites
@@ -55,6 +55,10 @@ class QDSearchDNA(Task):
         self.n_centroids = n_centroids
         self.n_centroid_samples = n_centroid_samples
         self.score_to_coverage_ratio = score_to_coverage_ratio
+
+    @property
+    def mode(self):
+        return 'max'
 
     # @jit_method
     def init(self, stage, training_state, key):
@@ -155,108 +159,108 @@ class QDSearchDNA(Task):
         return metric_values
 
 
-class InputOptimization(Task):
-    datamodule: DataModule
-    input_size: int
-    loss_fn: Callable
-    optim: optax.GradientTransformation
-    steps: int
-    prepare_batch: Callable
+# class InputOptimization(Task):
+#     datamodule: DataModule
+#     input_size: int
+#     loss_fn: Callable
+#     optim: optax.GradientTransformation
+#     steps: int
+#     prepare_batch: Callable
 
-    def __init__(
-        self,
-        datamodule: DataModule,
-        input_size: int,
-        loss_fn: Callable,
-        optim: optax.GradientTransformation,
-        steps: int = 50,
-        metrics=None,
-        prepare_batch=None,
-    ) -> None:
-        super().__init__()
+#     def __init__(
+#         self,
+#         datamodule: DataModule,
+#         input_size: int,
+#         loss_fn: Callable,
+#         optim: optax.GradientTransformation,
+#         steps: int = 50,
+#         metrics=None,
+#         prepare_batch=None,
+#     ) -> None:
+#         super().__init__()
 
-        if prepare_batch is None:
-            prepare_batch = lambda x: x
-        if metrics is None:
-            metrics = MetricCollection([loss_fn], ['loss'])
+#         if prepare_batch is None:
+#             prepare_batch = lambda x: x
+#         if metrics is None:
+#             metrics = MetricCollection([loss_fn], ['loss'])
 
-        self.datamodule = datamodule
-        self.input_size = input_size
-        self.loss_fn = loss_fn
-        self.optim = optim
-        self.steps = steps
-        self.metrics = metrics
-        self.prepare_batch = prepare_batch
+#         self.datamodule = datamodule
+#         self.input_size = input_size
+#         self.loss_fn = loss_fn
+#         self.optim = optim
+#         self.steps = steps
+#         self.metrics = metrics
+#         self.prepare_batch = prepare_batch
 
-    def goals(self):
-        try:
-            return jnp.transpose(jnp.stack(self.datamodule.targets), [0, 3, 1, 2])  # type: ignore
-        except AttributeError as e:
-            e.add_note("Dataset must have a targets field")
-            raise e
+#     def goals(self):
+#         try:
+#             return jnp.transpose(jnp.stack(self.datamodule.targets), [0, 3, 1, 2])  # type: ignore
+#         except AttributeError as e:
+#             e.add_note("Dataset must have a targets field")
+#             raise e
 
-    @jax_partial
-    def init(self, _, key):
-        goals = self.goals()
-        inputs = jr.normal(key, (len(goals), self.input_size))
-        optax_state = self.optim.init(inputs)
-        return (inputs, goals), optax_state
+#     @jax_partial
+#     def init(self, _, key):
+#         goals = self.goals()
+#         inputs = jr.normal(key, (len(goals), self.input_size))
+#         optax_state = self.optim.init(inputs)
+#         return (inputs, goals), optax_state
 
-    @jax_partial
-    def eval(self, model, state, key):
-        (inputs, goals), optim_state = state
+#     @jax_partial
+#     def eval(self, model, state, key):
+#         (inputs, goals), optim_state = state
 
-        @eqx.filter_jit
-        def eval_fn(inputs, key):
-            batched_keys = jr.split(key, len(inputs))
-            outputs, _ = jax.vmap(model)(inputs, batched_keys)
-            return jax.vmap(self.loss_fn)(outputs, goals).mean(axis=0)
+#         @eqx.filter_jit
+#         def eval_fn(inputs, key):
+#             batched_keys = jr.split(key, len(inputs))
+#             outputs, _ = jax.vmap(model)(inputs, batched_keys)
+#             return jax.vmap(self.loss_fn)(outputs, goals).mean(axis=0)
 
-        @eqx.filter_jit
-        def grad_step(carry, _):
-            inputs, opt_state, key = carry
-            key, eval_key = jr.split(key)
+#         @eqx.filter_jit
+#         def grad_step(carry, _):
+#             inputs, opt_state, key = carry
+#             key, eval_key = jr.split(key)
 
-            loss_value, grads = eqx.filter_value_and_grad(eval_fn)(inputs, eval_key)
+#             loss_value, grads = eqx.filter_value_and_grad(eval_fn)(inputs, eval_key)
 
-            updates, opt_state = self.optim.update(grads, opt_state, inputs)
-            inputs = eqx.apply_updates(inputs, updates)
+#             updates, opt_state = self.optim.update(grads, opt_state, inputs)
+#             inputs = eqx.apply_updates(inputs, updates)
 
-            return (inputs, opt_state, key), loss_value
+#             return (inputs, opt_state, key), loss_value
 
-        (inputs, optim_state, key), _ = jax.lax.stop_gradient(
-            jax.lax.scan(grad_step, (inputs, optim_state, key), jnp.arange(self.steps))
-        )
+#         (inputs, optim_state, key), _ = jax.lax.stop_gradient(
+#             jax.lax.scan(grad_step, (inputs, optim_state, key), jnp.arange(self.steps))
+#         )
 
-        return eval_fn(inputs, key), ((inputs, goals), optim_state)
+#         return eval_fn(inputs, key), ((inputs, goals), optim_state)
 
-    @jax_partial
-    def validate(
-        self,
-        model: FunctionalModel,
-        state: PyTree,
-        key: jr.KeyArray
-    ):
-        (inputs, goals), _ = state
-        batched_keys = jr.split(key, len(inputs))
+#     @jax_partial
+#     def validate(
+#         self,
+#         model: FunctionalModel,
+#         state: PyTree,
+#         key: jr.KeyArray
+#     ):
+#         (inputs, goals), _ = state
+#         batched_keys = jr.split(key, len(inputs))
 
-        pred = jax.vmap(model)(inputs, batched_keys)
-        pred, goals = self.prepare_batch(pred, goals)
+#         pred = jax.vmap(model)(inputs, batched_keys)
+#         pred, goals = self.prepare_batch(pred, goals)
 
-        metrics = self.metrics.compute(pred, goals)
+#         metrics = self.metrics.compute(pred, goals)
 
-        return (metrics, pred), state  # No extra results here
+#         return (metrics, pred), state  # No extra results here
 
-    @jax_partial
-    def predict(
-        self,
-        model: FunctionalModel,
-        state: PyTree,
-        key: jr.KeyArray,
-    ):
-        inputs = state[0][0]
-        batched_keys = jr.split(key, len(inputs))
-        return jax.vmap(model)(inputs, batched_keys)[0], state
+#     @jax_partial
+#     def predict(
+#         self,
+#         model: FunctionalModel,
+#         state: PyTree,
+#         key: jr.KeyArray,
+#     ):
+#         inputs = state[0][0]
+#         batched_keys = jr.split(key, len(inputs))
+#         return jax.vmap(model)(inputs, batched_keys)[0], state
 
 
 # class InputEvoSearch(Task):

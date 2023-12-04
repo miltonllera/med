@@ -5,9 +5,10 @@ from typing import Any, Callable, Optional, Union
 import numpy as np
 import jax.numpy as jnp
 import jax.tree_util as jtu
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import equinox as eqx
-import optax
+from qdax.core.containers.mapelites_repertoire import MapElitesRepertoire
+# import optax
 
 from src.analysis.visualization import plot_2d_repertoire
 
@@ -119,22 +120,22 @@ def search_task_optimizer_state(training_state):
     return training_state[2][1]
 
 
-class LRMonitor(Callback):
-    def __init__(self, state_indexer=None, key='lr_value'):
-        if state_indexer is None:
-            state_indexer = backprop_optimizer_state
+# class LRMonitor(Callback):
+#     def __init__(self, state_indexer=None, key='lr_value'):
+#         if state_indexer is None:
+#             state_indexer = backprop_optimizer_state
 
-        self.get_state = state_indexer
-        self.lr_history = []
-        self.key = key
+#         self.get_state = state_indexer
+#         self.lr_history = []
+#         self.key = key
 
-    def train_loop_end(self, iteration, _, training_state):
-        opt_state: optax.OptState = self.get_state(training_state)
-        try:
-            lr = opt_state.hyperparams['learning_rate'].item()  # type: ignore
-            self._logger.log_scalar(self.key, iteration, lr)
-        except AttributeError as e:
-            e.add_note("Did you forget to use 'optax.inject_hyperparams'?")
+#     def train_loop_end(self, iteration, _, training_state):
+#         opt_state: optax.OptState = self.get_state(training_state)
+#         try:
+#             lr = opt_state.hyperparams['learning_rate'].item()  # type: ignore
+#             self._logger.log_scalar(self.key, iteration, lr)
+#         except AttributeError as e:
+#             e.add_note("Did you forget to use 'optax.inject_hyperparams'?")
 
 
 class VisualizationCallback(Callback):
@@ -165,32 +166,48 @@ class QDMapVisualizer(Callback):
         self.save_prefix = save_prefix
         os.makedirs(save_dir, exist_ok=True)
 
-    def validation_end(self, iter, metrics, extra_results, _) -> Any:
+    def validation_end(self, iter, metrics, extra_results, _) -> None:
         # Note: ignore the metrics in the function signature, those are averaged. We have to
         # select one repertoire and it's corresponding metrics to plot. Right now I am just
         # selecting the first one (of the last validation step), but this should be something
         # like median, min and max.
         repertoire, bd_limits = extra_results
+        repertoire: MapElitesRepertoire
 
-        repertoire = jtu.tree_map(lambda x: x[-1][0], repertoire)
-        # metrics = jtu.tree_map(lambda x: x[-1][0], metrics)
+        max_idx = repertoire.fitnesses.argmax()
+        # min_idx = repertoire.fitnesses.argmin()
+        # median_idx = jnp.argsort(repertoire.fitnesses)[len(repertoire.fitness)//2]
+
+        max_repertoire = jtu.tree_map(lambda x: x[-1][max_idx], repertoire)
+        # min_repertoire = jtu.tree_map(lambda x: x[-1][min_idx], repertoire)
+        # median_repertoire = jtu.tree_map(lambda x: x[-1][median_idx], repertoire)
+
+        # repertoires = [max_repertoire, median_repertoire, min_repertoire]
+        repertoires = [max_repertoire]
         bd_limits = jtu.tree_map(lambda x: x[-1][0], bd_limits)  # limits is also repeated...
 
-        fig, _ = plot_2d_repertoire(
-            repertoire,
-            *bd_limits
-        )
+        for key, repertoire in zip(['max', 'min', 'median'], repertoires):
+            fig, _ = plot_2d_repertoire(
+                repertoire,
+                *bd_limits
+            )
 
-        if self.save_prefix == "":
-            file_name = f"repertoire_iter-{iter}"
-        else:
-            file_name = f"{self.save_prefix}_repertoire-{iter}"
+            if self.save_prefix == "":
+                file_name = f"{key}-repertoire_iter-{iter}"
+            else:
+                file_name = f"{self.save_prefix}_{key}-repertoire_{iter}"
 
-        save_file = osp.join(self.save_dir, file_name)
-        fig.savefig(save_file)
+            save_file = osp.join(self.save_dir, file_name)
+            fig.savefig(save_file)
 
 
 # class MapPlotter(Callback):
+#     def __init__(self, save_dir: str, save_prefix: str = "") -> None:
+#         super().__init__()
+#         self.save_dir = save_dir
+#         self.save_prefix = save_prefix
+
+#     def validation_end(self, iter, metrics, extra_results, _) -> None:
 
 
 

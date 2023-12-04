@@ -51,6 +51,11 @@ class MetricCollection:
 class Task(ABC):
     metrics: MetricCollection
 
+    @property
+    @abstractmethod
+    def mode(self):
+        raise NotImplementedError
+
     @abstractmethod
     def init(self, stage, state, key):
         raise NotImplementedError

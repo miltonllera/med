@@ -3,7 +3,7 @@ from typing import List, Optional
 from logging import getLogger
 
 import equinox as eqx
-import jax
+# import jax
 import jax.numpy as jnp
 from jax.random import KeyArray, split as split_key
 
