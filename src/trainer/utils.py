@@ -1,12 +1,59 @@
-import pickle
-from tqdm import tqdm
+import os.path as osp
+from dataclasses import dataclass, field
+from heapq import heapify, heappush, heappop, heappushpop
+from typing import Any, Union, Tuple
+
 import jax
+import equinox as eqx
 from jax.experimental import host_callback as hcb
+from tqdm import tqdm
+from jaxtyping import PyTree
 
 
-def pickle_save(filename, params):
-    with open(filename, "wb") as f:
-        pickle.dump(params, f)
+
+@dataclass(order=True)
+class PriorityItem:
+    priority: Union[float, int]
+    item: Any = field(compare=False)
+
+
+class PriorityQueue:
+    def __init__(self, max_cap: int, items):
+        self.max_cap = max_cap
+        self.items = [PriorityItem(*i) for i in items]
+        heapify(self.items)
+        while len(self.items) > max_cap:
+            heappop(self.items)
+
+    def __len__(self):
+        return len(self.items)
+
+    def __iter__(self):
+        return iter(self.items)
+
+    @property
+    def lowest_priority(self):
+        return self.items[0].priority
+
+    def push_and_pop(self, item: Tuple[Union[float, int], Any]) -> Union[None, Tuple]:
+        if len(self.items) == self.max_cap:
+            value = heappushpop(self.items, PriorityItem(*item))
+            value = value.priority, value.item
+        else:
+            heappush(self.items, PriorityItem(*item))
+            value = None
+
+        return value
+
+
+def save_pytree(model: PyTree, save_folder: str, save_name: str):
+    save_file = osp.join(save_folder, f"{save_name}.eqx")
+    eqx.tree_serialise_leaves(save_file, model)
+
+
+def load_pytree(save_folder: str,  file_name: str, template: PyTree):
+    save_file = osp.join(save_folder, f"{file_name}.eqx")
+    return eqx.tree_deserialise_leaves(save_file, template)
 
 
 def progress_bar_scan(num_samples, message=None):

@@ -74,10 +74,12 @@ class NCA(DevelopmentalModel):
         )
 
     @jax.named_scope("src.model.NCA.step")
-    def step(self, state: Tuple[TENSOR, TENSOR, Int, jr.KeyArray], i: int):
-        cell_states, input_embedding, dev_steps, key = state
+    def step(self, state: Tuple[TENSOR, TENSOR, Int, jr.KeyArray], i: int) -> Tuple[State, TENSOR]:
+        dev_steps = state[2]
 
-        def _step():
+        def _step(state):
+            cell_states, input_embedding, dev_steps, key = state
+
             update_key, context_key, carry_key = jr.split(key, 3)
 
             pre_alive_mask = self.alive_fn(cell_states)
@@ -92,9 +94,9 @@ class NCA(DevelopmentalModel):
             alive_mask = (self.alive_fn(new_states) & pre_alive_mask).astype(jnp.float32)
             new_states = new_states * alive_mask
 
-            cell_state = new_states if self.output_dev_states else None  # Only for model analysis
+            cell_states = new_states if self.output_dev_states else None  # Only for model analysis
 
-            return State(new_states, input_embedding, dev_steps, carry_key), cell_state
+            return State(new_states, input_embedding, dev_steps, carry_key), cell_states
 
         # NOTE: in this case 'jax.cond' exectutes both branches during evaluation since the
         # functions are not dependent on the input. We could make it short-circuit by passing i
@@ -105,7 +107,8 @@ class NCA(DevelopmentalModel):
         return jax.lax.cond(
             i < dev_steps,
             _step,
-            lambda: (state, cell_states if self.output_dev_states else None)
+            lambda state: (state, state[0] if self.output_dev_states else None),
+            state,
         )
 
     def stochastic_update_mask(self, key: jr.PRNGKeyArray):

@@ -84,7 +84,7 @@ class DNAContext(eqx.Module):
             output_size = state_size
 
         self.attention = nn.MultiheadAttention(
-            n_heads, state_size, dna_emb_size, dna_emb_size, output_size, key=key
+            n_heads, state_size, dna_emb_size, dna_emb_size, output_size, state_size, key=key
         )
 
     def __call__(

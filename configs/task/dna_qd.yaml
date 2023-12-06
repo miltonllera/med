@@ -1,7 +1,7 @@
 defaults:
   - /qd@qd_algorithm: map_elites
 
-_target_: src.task.input_search.QDSearchDNA
+_target_: src.task.dnaqd.QDSearchDNA
 
 popsize: 100
 

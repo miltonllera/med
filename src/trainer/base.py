@@ -79,8 +79,6 @@ class Trainer(ABC):
             " steps. Check 'scan_step' and 'eval_freq values if this is not correct."
         )
 
-        self.run_callbacks('init')
-
         if self._jit_step_fns:
             step_fn = eqx.filter_jit(step_fn)
             val_step_fn = eqx.filter_jit(val_step_fn)
@@ -91,6 +89,8 @@ class Trainer(ABC):
 
         init_key, val_key = split_key(key)
         training_state = self.init("train", model, None, key=init_key, **kwargs)
+
+        self.run_callbacks('init', model, training_state)
 
         for i in range(n_loops):
             # training_state, fitness_or_loss = jax.lax.scan(

@@ -51,6 +51,8 @@ trainer:
 callbacks:
   model_checkpoint:
     monitor_key: val/fitness_mean
+    state_getter:
+      _target_: src.trainer.evo.BestModelFromState
   viz_mpe_repertoire:
     n_iters: ${task.n_iters}
     save_dir: ${paths.output_dir}/visualizations

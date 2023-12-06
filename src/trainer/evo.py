@@ -192,8 +192,8 @@ class EvoTrainer(Trainer):
             key = "loss"
 
         return {
-            f'train/{key}_min': jnp.min(fitness_or_loss, axis=1),  # currently hardcoded for minimization
-            f'train/{key}_max': jnp.max(fitness_or_loss, axis=1),  # currently hardcoded for minimization
+            f'train/{key}_min': jnp.min(fitness_or_loss, axis=1),
+            f'train/{key}_max': jnp.max(fitness_or_loss, axis=1),
             f'train/{key}_mean': jnp.mean(fitness_or_loss, axis=1),
             f'train/{key}_var': jnp.var(fitness_or_loss, axis=1)
         }
@@ -231,3 +231,22 @@ def split_model(model: Union[FunctionalModel, Tuple[FunctionalModel, ...]]) -> T
     partitions = tuple(m.partition() for m in model)
 
     return tuple(zip(*partitions))
+
+
+class BestModelFromState:
+    def __init__(self):
+        self.model_template = None
+        self.param_template = None
+        self.param_shaper = None
+
+    def init(self, model, _):
+        model_params, model_template  = split_model(model)
+        self.param_shaper = ex.core.ParameterReshaper(model_params)
+        self.model_template = model_template
+        self.param_template = model_params
+
+    def __call__(self, training_state: PyTree):
+        if self.param_shaper is None:
+            raise RuntimeError
+        best_params = self.param_shaper.reshape_single(training_state[0].best_member)
+        return eqx.combine(best_params, self.model_template)

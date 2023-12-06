@@ -1,15 +1,19 @@
 import os
 import os.path as osp
-from typing import Any, Callable, Optional, Union
+from collections import deque
+from heapq import heappushpop, heappush
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
-import jax.numpy as jnp
+# import jax.numpy as jnp
 import jax.tree_util as jtu
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import equinox as eqx
 from qdax.core.containers.mapelites_repertoire import MapElitesRepertoire
-# import optax
+from jaxtyping import Float, Array, PyTree
 
+from src.trainer.utils import PriorityQueue, save_pytree, load_pytree
 from src.analysis.visualization import plot_2d_repertoire
 
 
@@ -47,14 +51,16 @@ class Checkpoint(Callback):
         super().__init__()
         self.save_dir = save_dir
         self.file_template = file_template
-
-        self.init()
         self._ckpt_state = None
         self._ckpt_iter = 0
         os.makedirs(save_dir)
 
     @property
     def best_state(self):
+        raise NotImplementedError
+
+    @property
+    def last_state(self):
         raise NotImplementedError
 
     def train_end(self, *_):
@@ -71,31 +77,44 @@ class MonitorCheckpoint(Checkpoint):
         self,
         save_dir: str,
         file_template: str,
-        monitor_key=None,
-        mode='min',
+        k_best: int = 1,
+        mode: str = 'min',
+        monitor_key: Union[Callable, int, str, None] = None,
         state_getter: Optional[Union[Callable, str, int]] = None,
     ) -> None:
+        file_template = "best_ckpt-" + file_template
+
         super().__init__(save_dir, file_template)
 
         if state_getter is not None and not isinstance(state_getter, Callable):
             getter = lambda x: x[state_getter]
-        else:
+        elif state_getter is None:
             getter = lambda x: x
+        else:
+            getter = state_getter
 
+        self.k_best = k_best
         self.mode = mode
         self.monitor_key = monitor_key
         self.state_getter = getter
 
-        self._best_val = (1 if mode == "min" else -1) * np.inf
+        self._ckpts = PriorityQueue(k_best, [])
+        self._state_template = None
 
     def has_improved(self, metric):
-        if self.mode == "max":
-            return self._best_val < metric
-        return self._best_val > metric
+        if len(self._ckpts) < self.k_best:
+            return True
 
-    @property
+        return metric > self._ckpts.lowest_priority
+
     def best_state(self):
-        return self._ckpt_state
+        best_state_file = max(self._ckpts).item
+        return load_pytree(self.save_dir, best_state_file, self._state_template)
+
+    def init(self, model, state):
+        if self.state_getter is not None:
+            self.state_getter.init(model, state)
+        self._state_template = self.state_getter(state)
 
     def validation_end(self, iter, metric, _, state) -> Any:
         state = self.state_getter(state)
@@ -106,18 +125,84 @@ class MonitorCheckpoint(Checkpoint):
             except KeyError as e:
                 e.add_note(f"Available keys are {metric.keys()}")
 
-        if self.has_improved(metric):
-            self._best_val = metric
-            self._ckpt_state = state
-            self._ckpt_iter = iter
+        priority = metric if self.mode == "max" else -metric
+        if self.has_improved(priority):
+            file = self.file_template.format(iteration=self._ckpt_iter)
+
+            save_pytree(
+                state,
+                self.save_dir,
+                self.file_template.format(iteration=self._ckpt_iter)
+            )
+
+            to_delete = self._ckpts.push_and_pop((priority, file))
+
+            if to_delete is not None:
+                path = Path(osp.join(self.save_dir, to_delete[1]))
+                path.unlink(True)
 
 
-def backprop_optimizer_state(training_state):
-    return training_state[1]
+class PeriodicCheckpoint(Checkpoint):
+    def __init__(
+        self,
+        save_dir: str,
+        file_template: str,
+        checkpoint_freq: int = 1,
+        max_checkpoints: int = 1,
+        state_getter: Optional[Union[Callable, str, int]] = None,
+    ) -> None:
+        file_template = "periodic_ckpt-" + file_template
+
+        super().__init__(save_dir, file_template)
+
+        if state_getter is not None and not isinstance(state_getter, Callable):
+            getter = lambda x: x[state_getter]
+        else:
+            getter = lambda x: x
+
+        self.state_getter = getter
+        self.file_template = file_template
+        self.checkpoint_freq = checkpoint_freq
+        self.max_checkpoints = max_checkpoints
+        self._ckpt_files = deque()
+        self._ckpt_state = None
+
+    @property
+    def last_checpoint_state(self):
+        return self._ckpt_state
+
+    def validation_end(self, iter, metric, _, state) -> None:
+        if iter % self.checkpoint_freq != 0:
+            return
+
+        state = self.state_getter(state)
+
+        if len(self._ckpt_files) == self.max_checkpoints:
+            self.delete_oldest()
+
+        self.update_files(iter, state)
+
+    def delete_oldest(self):
+        path = Path(self._ckpt_files.popleft())
+        path.unlink(True)
+
+    def update_files(self, iter, state):
+        new_file = osp.join(self.save_dir, self.file_template.format(iter))
+        self._ckpt_files.append(new_file)
+
+        save_pytree(
+            state,
+            self.save_dir,
+            self.file_template.format(iteration=self._ckpt_iter)
+        )
 
 
-def search_task_optimizer_state(training_state):
-    return training_state[2][1]
+# def backprop_optimizer_state(training_state):
+#     return training_state[1]
+
+
+# def search_task_optimizer_state(training_state):
+#     return training_state[2][1]
 
 
 # class LRMonitor(Callback):
@@ -166,13 +251,18 @@ class QDMapVisualizer(Callback):
         self.save_prefix = save_prefix
         os.makedirs(save_dir, exist_ok=True)
 
-    def validation_end(self, iter, metrics, extra_results, _) -> None:
+    def validation_end(
+        self,
+        iter,
+        metrics: Dict[str, Float[Array, "..."]],
+        extra_results: Tuple[MapElitesRepertoire, PyTree],
+        _
+    ) -> None:
         # Note: ignore the metrics in the function signature, those are averaged. We have to
         # select one repertoire and it's corresponding metrics to plot. Right now I am just
         # selecting the first one (of the last validation step), but this should be something
         # like median, min and max.
         repertoire, bd_limits = extra_results
-        repertoire: MapElitesRepertoire
 
         max_idx = repertoire.fitnesses.argmax()
         # min_idx = repertoire.fitnesses.argmin()
@@ -199,18 +289,37 @@ class QDMapVisualizer(Callback):
 
             save_file = osp.join(self.save_dir, file_name)
             fig.savefig(save_file)
+            plt.close(fig)
 
 
-# class MapPlotter(Callback):
-#     def __init__(self, save_dir: str, save_prefix: str = "") -> None:
-#         super().__init__()
-#         self.save_dir = save_dir
-#         self.save_prefix = save_prefix
+class QDOutputPlotter(Callback):
+    def __init__(self, save_dir: str, save_prefix: str = "") -> None:
+        super().__init__()
+        self.save_dir = save_dir
+        self.save_prefix = save_prefix
 
-#     def validation_end(self, iter, metrics, extra_results, _) -> None:
+    def validation_end(self,
+        iter,
+        metrics: Dict[str, Float[Array, "..."]],
+        extra_results: Tuple[Float[Array, "..."], MapElitesRepertoire, PyTree],
+        _
+    ) -> None:
+        outputs, repertoire = extra_results[:2]
 
+        # take the last one of the evlaution iters
+        outputs = outputs[-1]
+        # max_idx = repertoire.fitnesses.argmax()
+        n_models, _, n_maps = outputs.shape[:3]
 
+        rand_model_idx = np.random.randint(0, n_models)
+        rand_map_idx = np.random.randint(0, n_maps)
+        rand_map = outputs[rand_model_idx, -1, rand_map_idx]
 
-def save_pytree(model: eqx.Module, save_folder: str, save_name: str):
-    save_file = osp.join(save_folder, f"{save_name}.eqx")
-    eqx.tree_serialise_leaves(save_file, model)
+        rand_map = np.transpose(np.asarray(rand_map), (1, 2, 0)).argmax(axis=-1).astype(np.float32)
+
+        fig = plt.gcf()
+
+        plt.imshow(rand_map)
+
+        fig.savefig(osp.join(self.save_dir, f"random_map-iteration_{iter}"))
+        plt.close(fig)

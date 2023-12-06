@@ -1,0 +1,71 @@
+defaults:
+  - /model@dna_sampler: dna_iid_sampler.yaml
+  - _self_
+
+_target_: src.model.nca.nca_dna_sampler_pair
+
+nca:
+  _target_: src.model.nca.NCA
+
+  dev_steps: 50
+  state_size: 9
+  grid_size: ???  # set in each experiment
+  update_prob: 0.5
+
+  input_encoder:
+    _target_: src.nn.dna.DNADecoder
+    alphabet_size: ${model.dna_sampler.alphabet_size}
+    sequence_length: ${model.dna_sampler.sequence_length}
+    embedding_size: 16
+    input_is_distribution: True
+    key: ${prng_key:}
+
+  context_fn:
+    _target_: src.nn.dna.DNAContext
+    n_heads: 1
+    state_size: ${model.nca.state_size}
+    dna_emb_size: 16
+    key: ${prng_key:}
+
+  alive_fn:
+    _target_: src.nn.ca.MaxPoolAlive
+    alive_threshold: 0.1
+    alive_bit: 3
+
+  message_fn:
+    - _target_: equinox.nn.Conv2d
+      in_channels: ${model.nca.state_size}
+      out_channels: ${model.nca.state_size}
+      kernel_size: 3
+      padding: 1
+      key: ${prng_key:}
+
+
+  update_fn:
+    _target_: equinox.nn.Sequential
+    layers:
+      - _target_: equinox.nn.Conv2d
+        in_channels: ${prod:${model.nca.state_size},3}
+        out_channels: 32
+        kernel_size: 1
+        key: ${prng_key:}
+      - _target_: equinox.nn.Lambda
+        fn: ${get_fn:jax.nn.relu}
+      - _target_: equinox.nn.Conv2d
+        in_channels: 32
+        out_channels: ${model.nca.state_size}
+        kernel_size: 1
+        key: ${prng_key:}
+      - _target_: equinox.nn.Lambda
+        fn: ${get_fn:jax.nn.sigmoid}
+
+  output_decoder:
+    _target_: src.nn.ca.SliceOutput
+    dim: 0
+    start_idx: 0
+    end_idx: 1
+    # must either be a valid tile or an invalid one.
+    squashing_function:
+      _target_: jax.nn.softmax
+      _partial_: True
+      axis: 0
