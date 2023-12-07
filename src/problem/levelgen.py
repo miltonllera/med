@@ -16,6 +16,7 @@ from src.problem.base import QDProblem, Fitness, Descriptor, ExtraScores
 MAX_VALUE = np.finfo(np.float32).max
 N_CPUS = mp.cpu_count()
 
+
 class ZeldaLevelGeneration(QDProblem):
     def __init__(
         self,

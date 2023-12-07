@@ -22,8 +22,8 @@ model:
 
 task:
   n_iters: 10
-  popsize: 100
-  n_centroids: 1000
+  popsize: 300
+  n_centroids: 200
 
   qd_algorithm:
     emitter:
@@ -56,3 +56,4 @@ callbacks:
   viz_mpe_repertoire:
     n_iters: ${task.n_iters}
     save_dir: ${paths.output_dir}/visualizations
+    measure_names: ["path length", "symmetry"]

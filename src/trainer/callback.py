@@ -63,13 +63,13 @@ class Checkpoint(Callback):
     def last_state(self):
         raise NotImplementedError
 
-    def train_end(self, *_):
-        if self._ckpt_state is not None:
-            save_pytree(
-                self._ckpt_state,
-                self.save_dir,
-                self.file_template.format(iteration=self._ckpt_iter)
-            )
+    # def train_end(self, *_):
+    #     if self._ckpt_state is not None:
+    #         save_pytree(
+    #             self._ckpt_state,
+    #             self.save_dir,
+    #             self.file_template.format(iteration=self._ckpt_iter)
+    #         )
 
 
 class MonitorCheckpoint(Checkpoint):
@@ -127,16 +127,10 @@ class MonitorCheckpoint(Checkpoint):
 
         priority = metric if self.mode == "max" else -metric
         if self.has_improved(priority):
-            file = self.file_template.format(iteration=self._ckpt_iter)
-
-            save_pytree(
-                state,
-                self.save_dir,
-                self.file_template.format(iteration=self._ckpt_iter)
-            )
-
+            file = self.file_template.format(iteration=iter)
             to_delete = self._ckpts.push_and_pop((priority, file))
 
+            save_pytree(state, self.save_dir, file)
             if to_delete is not None:
                 path = Path(osp.join(self.save_dir, to_delete[1]))
                 path.unlink(True)
@@ -244,11 +238,12 @@ class VisualizationCallback(Callback):
 
 
 class QDMapVisualizer(Callback):
-    def __init__(self, n_iters: int, save_dir: str, save_prefix: str = "") -> None:
+    def __init__(self, n_iters: int, save_dir: str, save_prefix: str = "", measure_names=None) -> None:
         super().__init__()
         self.n_iters = n_iters
         self.save_dir = save_dir
         self.save_prefix = save_prefix
+        self.measure_names = [] if measure_names is None else measure_names
         os.makedirs(save_dir, exist_ok=True)
 
     def validation_end(
@@ -277,10 +272,13 @@ class QDMapVisualizer(Callback):
         bd_limits = jtu.tree_map(lambda x: x[-1][0], bd_limits)  # limits is also repeated...
 
         for key, repertoire in zip(['max', 'min', 'median'], repertoires):
-            fig, _ = plot_2d_repertoire(
+            fig, ax = plot_2d_repertoire(
                 repertoire,
                 *bd_limits
             )
+
+            ax.set_xlabel(self.measure_names[0])
+            ax.set_ylabel(self.measure_names[1])
 
             if self.save_prefix == "":
                 file_name = f"{key}-repertoire_iter-{iter}"

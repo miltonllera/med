@@ -24,8 +24,8 @@ QD_ALGORITHM = MAPElites  # Use Union to add more algorithms later
 class QDSearchDNA(Task):
     """
     Search over possible DNA sequences that guide the rollout of a developmental model. Note that
-    unlike other tasks, the models here must be able to provide a set of DNAs (this can be a fixed
-    list, a sampling or any other method).
+    unlike other tasks, the models here are pairs of NCA + DNA generator. This can be any function
+    that returns a sample of sequences, whether this is a fixed list or randomly generated.
     """
     problem: QDProblem
     qd_algorithm: QD_ALGORITHM
@@ -75,15 +75,23 @@ class QDSearchDNA(Task):
         qd_score = metrics['qd_score'][-1]
         coverage = metrics['coverage'][-1]
 
+        # coverage is a percetange, normalize it to (0, 1)
+        aggregated_qd_score = qd_score * coverage / 100
+
         # assume dna_samples are distributions over possible strings, so it has shape
         # (pop_size, string length * alphabet size)
         dna_sample = model_and_dna[1](self.popsize, key=key).reshape(self.popsize, -1)
         dna_variance = dna_sample.var()
 
-        # coverage is on a percetange basis, ratio it. regularize over dna variance
-        score = qd_score * coverage / 100 + self.dna_variance_coefficient * dna_variance
+        individual_terms = {
+            'aggregates_qd_score': aggregated_qd_score,
+            'dna_variance': dna_variance,
+        }
 
-        return score
+        # regularize using dna variance
+        score = aggregated_qd_score + self.dna_variance_coefficient * dna_variance
+
+        return score, individual_terms
 
     @jax_partial
     def eval(
@@ -95,7 +103,7 @@ class QDSearchDNA(Task):
         predict_key, fitness_key = jr.split(key)
         (_, metrics), _ = self.predict(model_and_dna, centroids, predict_key)  # type: ignore
 
-        fitness = self.overall_fitness(model_and_dna, metrics, fitness_key)
+        fitness, _ = self.overall_fitness(model_and_dna, metrics, fitness_key)
         # total_score = self.score_to_coverage_ratio * qd_score + coverage
         # currently this is not working, introduce some term that maximizes variation amongst dnas...
 
@@ -112,9 +120,10 @@ class QDSearchDNA(Task):
 
         (_, metrics), (mpe_state, _) = self.predict(model_and_dna, centroids, key) # type: ignore
 
-        fitness = self.overall_fitness(model_and_dna, metrics, fitness_key)
+        fitness, individual_terms = self.overall_fitness(model_and_dna, metrics, fitness_key)
 
         metrics['fitness'] = fitness
+        metrics =  {**metrics, **individual_terms}
 
         bd_limits = (self.problem.descriptor_min_val, self.problem.descriptor_max_val)
         repertoire = mpe_state[0]
@@ -158,8 +167,6 @@ class QDSearchDNA(Task):
             (mpe_state, key),
             jnp.arange(self.n_iters)
         )
-
-        scores, metrics = scores_and_metrics
 
         return scores_and_metrics, final_state
 
