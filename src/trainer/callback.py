@@ -1,7 +1,6 @@
 import os
 import os.path as osp
 from collections import deque
-from heapq import heappushpop, heappush
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
@@ -51,9 +50,6 @@ class Checkpoint(Callback):
         super().__init__()
         self.save_dir = save_dir
         self.file_template = file_template
-        self._ckpt_state = None
-        self._ckpt_iter = 0
-        os.makedirs(save_dir)
 
     @property
     def best_state(self):
@@ -112,6 +108,8 @@ class MonitorCheckpoint(Checkpoint):
         return load_pytree(self.save_dir, best_state_file, self._state_template)
 
     def init(self, model, state):
+        os.makedirs(self.save_dir, exist_ok=True)
+
         if self.state_getter is not None:
             self.state_getter.init(model, state)
         self._state_template = self.state_getter(state)

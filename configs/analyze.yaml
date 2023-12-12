@@ -1,0 +1,22 @@
+# @package _global_
+
+defaults:
+  - _self_  # override defaults
+  - paths: default
+  - analysis: ???
+  # - hydra: default
+
+
+task_name: analyze
+
+tags: ["dev"]
+
+seed: null
+
+run_path: ???
+
+overrides: {}
+
+hydra:
+  run:
+    dir: ${run_path}/analysis

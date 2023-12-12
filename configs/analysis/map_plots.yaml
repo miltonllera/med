@@ -1,0 +1,11 @@
+#@package _global_
+
+defaults:
+  - _self_
+
+tags: ["qd", "nca_dna", "evo"]
+
+analysis:
+  map_plots:
+    _target_: src.analysis.levelgen.QDModelLevelGenMapViz
+    save_dir: ${run_path}/analysis/visualizations/

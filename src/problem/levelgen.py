@@ -41,6 +41,10 @@ class ZeldaLevelGeneration(QDProblem):
         return 2
 
     @property
+    def descriptor_names(self):
+        return ["path length", "symmetry"]
+
+    @property
     def descriptor_min_val(self):
         return 0.0, 0.0
 
@@ -48,6 +52,10 @@ class ZeldaLevelGeneration(QDProblem):
     def descriptor_max_val(self):
         # maximum path lengthl, maximum symmetry score
         return self.height * self.width / 2 + self.width, self.height * self.width
+
+    @property
+    def score_name(self):
+        return "number of connected components"
 
     @property
     def score_offset(self):
@@ -104,8 +112,11 @@ class ZeldaLevelGeneration(QDProblem):
 directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
 
 def batched_n_islands(int_maps):
-    batch_shapes = int_maps.shape[:2]
-    int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
+    if len(int_maps.shape) == 3:
+        batch_shapes = int_maps.shape[:1]
+    else:
+        batch_shapes = int_maps.shape[:2]
+        int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
 
     # with SnippetTimer() as st:
     with mp.Pool(N_CPUS - 1) as pool:
@@ -154,8 +165,11 @@ def n_islands(int_map: np.ndarray, non_traversible_tiles=(0,)):
 
 
 def batched_lsp(int_maps):
-    batch_shapes = int_maps.shape[:2]
-    int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
+    if len(int_maps.shape) == 3:  # when analysing a model we do not have an extra leading dim
+        batch_shapes = int_maps.shape[:1]
+    else:
+        batch_shapes = int_maps.shape[:2]
+        int_maps = int_maps.reshape((-1, *int_maps.shape[2:]))
 
     # with SnippetTimer() as st:
     with mp.Pool(N_CPUS - 1) as pool:

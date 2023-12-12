@@ -1,14 +1,16 @@
-# import os
-# import os.path as osp
+import os
+import os.path as osp
 # import logging
 from functools import partial
 from typing import List, Tuple
 
 import numpy as np
 import jax.random as jr
+import equinox as eqx
 import hydra
 from hydra.utils import get_class, get_method
 from omegaconf import DictConfig, OmegaConf
+from jaxtyping import PyTree
 
 # from bin.extra.analysis import Analysis
 # from bin.extra.visualization import Visualzation
@@ -130,3 +132,77 @@ def instantiate_loggers(logger_cfg: DictConfig) -> List[Logger]:
 
 
 #----------------------------- Analysis ---------------------------------------
+
+def instantiate_analysis(cfg: DictConfig):
+    _log.info(f"Initializing analysis module...")
+
+    trainer, best_model = load_run(cfg.run_path, cfg.overrides)
+
+    analyses = instantiate(cfg.analysis)
+
+    return analyses, trainer, best_model
+
+    # metrics: Dict[str, Metric] = instantiate_metrics(cfg.metrics)
+
+    # visualizations = instantiate_visualizations(cfg.visualizations)
+
+    # logger = instantiate_loggers(cfg.logger)[0]
+
+    # analysis_module = Analysis(
+    #     datamodule=datamodule,
+    #     model=model,
+    #     trainer=trainer,
+    #     metrics=metrics,
+    #     visualizations=visualizations,
+    #     logger=logger,
+    # )
+
+
+def load_run(run_path: str, overrides: DictConfig) -> INSTANTIATED_RUN_MODULES:
+    _log.info(f"Loading run found at <{run_path}>...")
+
+    run_cfg = load_cfg(run_path)
+    run_cfg.callbacks = None
+
+    run_cfg.merge_with(overrides)
+
+    trainer, model = instantiate_run(run_cfg)
+
+    best_model = load_model_weights(model, run_path)
+
+    return trainer, best_model
+
+
+def load_cfg(run_path: str) -> DictConfig:
+    assert osp.isdir(run_path), f"Run log directory {run_path} does not exist"
+
+    config_path = osp.join(run_path, ".hydra", "hydra.yaml")
+    overrides_path = osp.join(run_path, ".hydra", "overrides.yaml")
+
+    loaded_config = OmegaConf.load(config_path).hydra.job.config_name
+    overrides = OmegaConf.load(overrides_path)
+
+    return hydra.compose(loaded_config, overrides=overrides)
+
+
+def load_model_weights(state: PyTree, save_folder: str):
+    # def deserialise_filter_spec(f, x):
+    #     if isinstance(x, jax.dtypes.bfloat16):
+    #         return jax.dtypes.bfloat16(jnp.load(f).item())
+    #     else:
+    #         return eqx.default_deserialise_filter_spec(f, x)
+
+    save_file = find_best_by_epoch(osp.join(save_folder, "checkpoints"))
+    return eqx.tree_deserialise_leaves(save_file, state)
+
+
+def find_best_by_epoch(checkpoint_folder: str) -> str:
+    ckpt_files = os.listdir(checkpoint_folder)  # list of strings
+
+    # checkpoint format is 'epoch_{int}.ckpt'
+    def is_epoch_ckpt(f: str):
+        return f[-10:-4].isdigit()
+
+    best_epoch = max([f[-10:-4] for f in ckpt_files if is_epoch_ckpt(f)])
+
+    return osp.join(checkpoint_folder, f"best_ckpt-iteration_{best_epoch}.eqx")
