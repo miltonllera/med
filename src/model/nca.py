@@ -1,4 +1,4 @@
-from typing import Callable, NamedTuple, Tuple
+from typing import Callable, NamedTuple, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -7,7 +7,7 @@ from jaxtyping import Int
 
 from src.utils import TENSOR
 from src.model.base import DevelopmentalModel, State
-from src.nn.dna import DNADistribution
+from src.nn.dna import DNADistribution, DNAList
 
 
 class NCA(DevelopmentalModel):
@@ -126,9 +126,9 @@ class NCA(DevelopmentalModel):
         return steps
 
 
-def nca_dna_sampler_pair(nca: NCA, dna_sampler: DNADistribution):
+def nca_dna_sampler_pair(nca: NCA, dna: Union[DNADistribution, DNAList]):
     class NCA_DNA_PAIR(NamedTuple):
         nca: NCA
-        dna_sampler: DNADistribution
+        dna_sampler: Union[DNADistribution, DNAList]
 
-    return NCA_DNA_PAIR(nca, dna_sampler)
+    return NCA_DNA_PAIR(nca, dna)

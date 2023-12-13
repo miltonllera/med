@@ -9,7 +9,7 @@ emitter:
     iso_sigma: 0.05
     line_sigma: 0.05
   variation_percentage: 1.0
-  batch_size: 1  # this is the population size
+  batch_size: 100  # this is the population size
 
 metrics_function:
   _target_: qdax.utils.metrics.default_qd_metrics

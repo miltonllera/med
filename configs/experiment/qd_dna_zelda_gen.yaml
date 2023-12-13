@@ -16,7 +16,7 @@ model:
   nca:
     dev_steps: 50
     grid_size: ["${task.problem.height}", "${task.problem.width}"]
-  dna_sampler:
+  dna:
     sequence_length: 8
     alphabet_size: 4
 

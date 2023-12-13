@@ -67,7 +67,7 @@ class Trainer(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def format_training_resutls(self, fitness_or_loss):
+    def format_training_results(self, fitness_or_loss):
         raise NotImplementedError
 
     def _fit_loop(self, model, step_fn, val_step_fn, *, key, **kwargs):
@@ -101,7 +101,7 @@ class Trainer(ABC):
                 step_fn, training_state, self._scan_steps
             )
 
-            log_dict = self.format_training_resutls(fitness_or_loss)
+            log_dict = self.format_training_results(fitness_or_loss)
 
             self.train_loop_end((i + 1) * self._scan_steps, log_dict, training_state)
 

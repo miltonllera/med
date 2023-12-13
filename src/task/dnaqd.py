@@ -134,7 +134,7 @@ class QDSearchDNA(Task):
 
     @jax_partial
     def predict(self, model_and_dna, centroids, key):
-        model, dna_distribution = model_and_dna
+        model, dna_gen = model_and_dna
 
         @jax.vmap
         def _eval(genotype, key):
@@ -142,9 +142,9 @@ class QDSearchDNA(Task):
             return self.problem(output)
 
         # Create the ME initial state
-        dna_sample_key, score_init_key, mpe_key = jr.split(key, 3)
+        dna_key, score_init_key, mpe_key = jr.split(key, 3)
 
-        dnas = dna_distribution(self.popsize, key=dna_sample_key).reshape(self.popsize, -1)
+        dnas = dna_gen(self.popsize, key=dna_key).reshape(self.popsize, -1)
 
         scores = _eval(dnas, jr.split(score_init_key, self.popsize))
 

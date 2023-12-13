@@ -183,7 +183,7 @@ class EvoTrainer(Trainer):
 
         return strategy, strategy_params
 
-    def format_training_resutls(self, fitness_or_loss):
+    def format_training_results(self, fitness_or_loss):
         # Unlike backprop training, 'fitness_or_loss' is over a population instead of a single
         # set of parameters. We thus convert it to several quantities of interest:
         if self.task.mode == "max":

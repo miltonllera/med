@@ -62,6 +62,7 @@ class DNADecoder(eqx.Module):
         if self.input_is_distribution:
             idxs = inputs.argmax(1)
             inputs = jnn.one_hot(idxs, self.alphabet_size)
+
         return self.position_embedding(self.embedding(inputs))
 
 
@@ -119,9 +120,9 @@ class DNAIndependentSampler(DNADistribution):
 
     def __init__(
         self,
-        sequence_length,
-        alphabet_size,
-        key,
+        sequence_length: int,
+        alphabet_size: int,
+        key: jr.KeyArray,
     ):
         self.dna_shape = sequence_length, alphabet_size
         self.logits_mean = jr.normal(key, shape=(sequence_length, alphabet_size))
@@ -131,6 +132,30 @@ class DNAIndependentSampler(DNADistribution):
         std = jnp.exp(0.5  * self.logits_logvar)
         logits = self.logits_mean + std * jr.normal(key, self.dna_shape)
         return logits
+
+    def partition(self):
+        return eqx.partition(self, eqx.is_array)
+
+
+class DNAList(eqx.Module):
+    n_dnas: int
+    dna_shape: Tuple[int, int]
+    dna_list: Float[Array, "N S A"]
+
+    def __init__(
+        self,
+        n_dnas: int,
+        sequence_length: int,
+        alphabet_size: int,
+        key: jr.KeyArray,
+    ):
+        self.n_dnas = n_dnas
+        self.dna_shape = sequence_length, alphabet_size
+        self.dna_list = jr.normal(key, shape=(n_dnas, sequence_length, alphabet_size))
+
+    def __call__(self, popsize, *, key) -> Float[Array, "N S A"]:
+        assert popsize == self.n_dnas
+        return self.dna_list
 
     def partition(self):
         return eqx.partition(self, eqx.is_array)
