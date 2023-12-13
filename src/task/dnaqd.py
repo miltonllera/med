@@ -84,7 +84,7 @@ class QDSearchDNA(Task):
         dna_variance = dna_sample.var()
 
         individual_terms = {
-            'aggregates_qd_score': aggregated_qd_score,
+            'aggregated_qd_score': aggregated_qd_score,
             'dna_variance': dna_variance,
         }
 

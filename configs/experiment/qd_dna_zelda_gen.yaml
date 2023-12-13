@@ -51,6 +51,7 @@ trainer:
 callbacks:
   model_checkpoint:
     monitor_key: val/fitness_mean
+    mode: max
     state_getter:
       _target_: src.trainer.evo.BestModelFromState
   viz_mpe_repertoire:
