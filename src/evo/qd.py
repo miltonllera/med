@@ -1,9 +1,11 @@
-# from functools import partial
-from typing import Callable, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import jax.numpy as jnp
 import jax.random as jr
 from qdax.core.map_elites import EmitterState, Emitter, MapElitesRepertoire, MAPElites as BaseME
+from qdax.core.emitters.cma_opt_emitter import CMAOptimizingEmitter as CMAOptEmitterBase
+# from qdax.core.emitters.cma_mega_emitter import CMAMEGAEmitter as CMAMEGAEmitterBase
+from qdax.core.containers.mapelites_repertoire import compute_cvt_centroids
 from qdax.types import Centroid, Metrics, Genotype, Fitness, Descriptor, ExtraScores, RNGKey
 from jaxtyping import Array, Float
 
@@ -107,6 +109,29 @@ class MAPElites(BaseME):
         metrics = self._metrics_function(repertoire)
 
         return (repertoire, emitter_state, key), metrics
+
+
+
+#---------------------------------- Emitters ---------------------------------------
+
+class CMAOptEmitter(CMAOptEmitterBase):
+    """
+    Emitter used to implement CMA-based Map-Elites (i.e. CMA-ME).
+    """
+    def __init__(self,
+        batch_size: int,
+        genotype_dim: int,
+        sigma_g: float,
+        min_count: Optional[int] = None,
+        max_count: Optional[float] = None,
+        *,
+        centroid_kwargs: Dict[str, Any],
+    ):
+        # We must create dummy centroids to initialize the qdax emitter. Most parameters do not need
+        # to match the ones actually used by a QD algorithm since these centroids are only used to
+        # access their number.
+        dummy_centroids, _ = compute_cvt_centroids(**centroid_kwargs)  # type: ignore
+        super().__init__(batch_size, genotype_dim, dummy_centroids, sigma_g, min_count, max_count)
 
 
 # @struct.dataclass

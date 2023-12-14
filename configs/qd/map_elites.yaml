@@ -1,15 +1,8 @@
+defaults:
+  - /emitter: mixing_emitter
+
 _target_: src.evo.qd.MAPElites
 
-emitter:
-  _target_: qdax.core.emitters.standard_emitters.MixingEmitter
-  mutation_fn: None
-  variation_fn:
-    _target_: qdax.core.emitters.mutation_operators.isoline_variation
-    _partial_: True
-    iso_sigma: 0.05
-    line_sigma: 0.05
-  variation_percentage: 1.0
-  batch_size: 100  # this is the population size
 
 metrics_function:
   _target_: qdax.utils.metrics.default_qd_metrics

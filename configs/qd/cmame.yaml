@@ -1,0 +1,4 @@
+defaults:
+  - map_elites
+  - override /emitter: cma_emitter
+  - _self_

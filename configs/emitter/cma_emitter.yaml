@@ -1,0 +1,14 @@
+_target_: src.evo.qd.CMAOptEmitter
+
+batch_size: 100
+genotype_dim: ???
+sigma_g: 1.0
+min_count: 0
+max_count: null  # this will set the value to np.inf
+centroid_kwargs:
+  num_centroids: 100
+  num_descriptors: 2
+  num_init_cvt_samples: 100
+  minval: [0, 100]
+  maxval: [0, 100]
+  random_key: ${prng_key:}
