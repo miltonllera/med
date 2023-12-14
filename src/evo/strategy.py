@@ -18,6 +18,8 @@ class EvoParams:
     sigma_init: float
     init_min: float = -1.0
     init_max: float = 1.0
+    clip_min: float = -1.0
+    clip_max: float = 1.0
 
 
 class DummyES(ex.Strategy):

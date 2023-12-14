@@ -1,0 +1,33 @@
+#@package _global_
+
+defaults:
+  - qd_dna_zelda_gen
+  - override /strategy@trainer.strategy: dummy
+  - _self_
+
+
+tags: ["qd", "zelda", "nca_dna", "evo-dummy"]
+
+
+task:
+  n_iters: 1000
+  popsize: 200  # number of initial dnas
+  n_centroids: 1000
+
+  qd_algorithm:
+    emitter:
+      batch_size: 201
+
+trainer:
+  steps: 1
+  eval_freq: 1
+  eval_steps: 1
+
+  strategy_params:
+    sigma_init: 1.0
+    init_min: -1.0
+    init_max: 1.0
+
+  strategy:
+    popsize: 2
+    maximize: True
