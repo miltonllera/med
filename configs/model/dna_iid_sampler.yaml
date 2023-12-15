@@ -1,4 +1,4 @@
 _target_: src.nn.dna.DNAIndependentSampler
-sequence_length: 10
-alphabet_size: 4
+sequence_length: ???
+alphabet_size: ???
 key: ${prng_key:}

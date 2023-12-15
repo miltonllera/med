@@ -26,7 +26,9 @@ nca:
     key: ${prng_key:}
 
   alive_fn:
-    _target_: src.nn.ca.IdentityAlive
+    _target_: src.nn.ca.MaxPoolAlive
+    alive_threshold: 0.1
+    alive_bit: 3
 
   message_fn:
     _target_: src.nn.ca.IdentityAndSobelFilter
@@ -46,6 +48,8 @@ nca:
         out_channels: ${model.nca.state_size}
         kernel_size: 1
         key: ${prng_key:}
+      - _target_: equinox.nn.Lambda
+        fn: ${get_fn:jax.nn.sigmoid}
 
   output_decoder:
     _target_: src.nn.ca.SliceOutput

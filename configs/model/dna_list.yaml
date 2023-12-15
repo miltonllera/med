@@ -1,5 +1,5 @@
 _target_: src.nn.dna.DNAList
-sequence_length: 8
-alphabet_size: 4
-n_dnas: 100
+sequence_length: ???
+alphabet_size: ???
+n_dnas: ???
 key: ${prng_key:}

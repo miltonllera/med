@@ -1,5 +1,4 @@
 defaults:
-  - /model@dna_sampler: dna_iid_sampler.yaml
   - _self_
 
 _target_: src.model.nca.nca_dna_sampler_pair
@@ -14,8 +13,8 @@ nca:
 
   input_encoder:
     _target_: src.nn.dna.DNADecoder
-    alphabet_size: ${model.dna_sampler.alphabet_size}
-    sequence_length: ${model.dna_sampler.sequence_length}
+    alphabet_size: ${model.dna.alphabet_size}
+    sequence_length: ${model.dna.sequence_length}
     embedding_size: 16
     input_is_distribution: True
     key: ${prng_key:}
@@ -28,18 +27,10 @@ nca:
     key: ${prng_key:}
 
   alive_fn:
-    _target_: src.nn.ca.MaxPoolAlive
-    alive_threshold: 0.1
-    alive_bit: 3
+    _target_: src.nn.ca.IdentityAlive
 
   message_fn:
-    - _target_: equinox.nn.Conv2d
-      in_channels: ${model.nca.state_size}
-      out_channels: ${model.nca.state_size}
-      kernel_size: 3
-      padding: 1
-      key: ${prng_key:}
-
+    _target_: src.nn.ca.IdentityAndSobelFilter
 
   update_fn:
     _target_: equinox.nn.Sequential
@@ -56,8 +47,6 @@ nca:
         out_channels: ${model.nca.state_size}
         kernel_size: 1
         key: ${prng_key:}
-      - _target_: equinox.nn.Lambda
-        fn: ${get_fn:jax.nn.sigmoid}
 
   output_decoder:
     _target_: src.nn.ca.SliceOutput
@@ -69,3 +58,5 @@ nca:
       _target_: jax.nn.softmax
       _partial_: True
       axis: 0
+
+dna: ???
