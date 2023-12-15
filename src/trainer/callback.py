@@ -100,9 +100,9 @@ class MonitorCheckpoint(Checkpoint):
     def has_improved(self, metric):
         if len(self._ckpts) < self.k_best:
             return True
-
         return metric > self._ckpts.lowest_priority
 
+    @property
     def best_state(self):
         best_state_file = max(self._ckpts).item
         return load_pytree(self.save_dir, best_state_file, self._state_template)

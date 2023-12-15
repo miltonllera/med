@@ -1,6 +1,7 @@
 from typing import Optional, Union, Tuple
 
 import jax
+import jax.numpy as jnp
 import evosax as ex
 import chex
 from flax import struct
@@ -11,6 +12,8 @@ from flax import struct
 class EvoState:
     members: chex.Array
     best_member: chex.Array
+    best_fitness: float
+    gen_counter: int = 0
 
 
 @struct.dataclass
@@ -51,6 +54,8 @@ class DummyES(ex.Strategy):
         return EvoState(
             members=init_x,
             best_member=init_x[0],
+            best_fitness=(1 if self.fitness_shaper.maximize else -1) * jnp.inf,
+            gen_counter=0,
         )
 
     def ask_strategy(

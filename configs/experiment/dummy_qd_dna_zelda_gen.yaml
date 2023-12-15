@@ -16,7 +16,7 @@ task:
 
   qd_algorithm:
     emitter:
-      batch_size: 201
+      batch_size: 200
 
 trainer:
   steps: 1
