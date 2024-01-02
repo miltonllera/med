@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
@@ -8,11 +8,11 @@ from qdax.core.containers.mapelites_repertoire import compute_cvt_centroids
 
 # from qdax.utils.metrics import default_qd_metrics
 
+from src.problem.base import QDProblem
 from src.task.base import Task
 from src.model.base import FunctionalModel
 from src.nn.dna import DNADistribution
-from src.evo.qd import MAPElites
-from src.problem.base import QDProblem
+from src.evo.qd import MAPElites, qd_score_x_coverage
 
 from src.utils import jax_partial
 
@@ -38,10 +38,11 @@ class QDSearchDNA(Task):
         self,
         problem,
         qd_algorithm,
-        n_iters,
-        popsize,
-        n_centroids=1000,
-        n_centroid_samples=None,
+        n_iters: int,
+        popsize: int,
+        n_centroids: int =1000,
+        n_centroid_samples: Optional[int] = None,
+        scoring_function: Callable[[Dict[str, Array]], float] = qd_score_x_coverage,
         dna_variance_coefficient: float = 1.0,
     ) -> None:
         if n_centroid_samples is None:
@@ -52,7 +53,8 @@ class QDSearchDNA(Task):
         self.n_iters = n_iters
         self.popsize = popsize
         self.n_centroids = n_centroids
-        self.n_centroid_samples = n_centroid_samples
+        self.n_centroid_samples = n_centroid_samples  # type: ignore
+        self.scoring_function = scoring_function
         self.dna_variance_coefficient = dna_variance_coefficient
 
     @property
@@ -72,11 +74,12 @@ class QDSearchDNA(Task):
         metrics: Dict[str, Float[Array, "..."]],
         key
     ):
-        qd_score = metrics['qd_score'][-1]
-        coverage = metrics['coverage'][-1]
+        # qd_score = metrics['qd_score'][-1]
+        # coverage = metrics['coverage'][-1]
 
-        # coverage is a percetange, normalize it to (0, 1)
-        aggregated_qd_score = qd_score * coverage / 100
+        # # coverage is a percetange, normalize it to (0, 1)
+        # aggregated_qd_score = qd_score * coverage / 100
+        aggregated_qd_score = self.scoring_function(metrics)
 
         # assume dna_samples are distributions over possible strings, so it has shape
         # (pop_size, string length * alphabet size)
@@ -150,7 +153,7 @@ class QDSearchDNA(Task):
 
         mpe_state = self.qd_algorithm.init(dnas, centroids, scores, mpe_key)
 
-        def step_fn(carry, _):
+        def step_fn(carry, i):
             # jax.debug.print("map-elite iteration: {}", i)
 
             mpe_state, key = carry

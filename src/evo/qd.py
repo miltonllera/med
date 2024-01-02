@@ -134,6 +134,21 @@ class CMAOptEmitter(CMAOptEmitterBase):
         super().__init__(batch_size, genotype_dim, dummy_centroids, sigma_g, min_count, max_count)
 
 
+#-------------------------------- Scoring Function ---------------------------------
+
+def coverage_only(qd_metrics):
+    coverage = qd_metrics['coverage'][-1]
+    return coverage / 100
+
+
+def qd_score_x_coverage(qd_metrics):
+    qd_score = qd_metrics['qd_score'][-1]
+    coverage = qd_metrics['coverage'][-1]
+
+    # coverage is a percetange, normalize it to (0, 1)
+    return qd_score * coverage / 100
+
+
 # @struct.dataclass
 # class EvoParams:
 #     n_centroids: int
