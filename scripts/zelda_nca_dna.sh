@@ -19,7 +19,14 @@
 #   +model@model.dna=dna_iid_sampler \
 
 # # dummy strategy
-CUDA_VISIBLE_DEVICES="3" python -m bin.train experiment=dummy_qd_dna_zelda_gen \
+# CUDA_VISIBLE_DEVICES="3" python -m bin.train experiment=dummy_qd_dna_zelda_gen \
+#   qd@task.qd_algorithm=cmame \
+#   +task.qd_algorithm.emitter.genotype_dim=32 \
+#   +model@model.dna=dna_iid_sampler
+#
+CUDA_VISIBLE_DEVICES="0" python -m bin.train \
+  experiment=qd_dna_zelda_gen \
   qd@task.qd_algorithm=cmame \
+  +qd/scoring_function@task.scoring_function=coverage_only \
   +task.qd_algorithm.emitter.genotype_dim=32 \
   +model@model.dna=dna_iid_sampler
