@@ -13,6 +13,7 @@ from src.task.base import Task
 from src.model.base import FunctionalModel
 from src.nn.dna import DNADistribution
 from src.evo.qd import MAPElites, qd_score_x_coverage
+from src.analysis.qd import _plot_2d_repertoire
 
 from src.utils import jax_partial
 
@@ -128,10 +129,10 @@ class QDSearchDNA(Task):
         metrics['fitness'] = fitness
         metrics =  {**metrics, **individual_terms}
 
-        bd_limits = (self.problem.descriptor_min_val, self.problem.descriptor_max_val)
+        bd_info = self.problem.descriptor_info
         repertoire = mpe_state[0]
 
-        extra_results = (repertoire, bd_limits)
+        extra_results = (repertoire, bd_info)
 
         return (metrics, extra_results), centroids
 
@@ -163,6 +164,15 @@ class QDSearchDNA(Task):
             scores = _eval(dnas, jr.split(eval_key, self.popsize))
             mpe_state, metrics = self.qd_algorithm.tell(dnas, scores, mpe_state)  # type: ignore
 
+            # debugging stuff
+            # jax.debug.callback(
+            #     plot_2d_repertoire_jax_callback_wrapper,
+            #     i,
+            #     mpe_state,
+            #     self.scoring_function(metrics),
+            #     self.problem.descriptor_info
+            # )
+
             return (mpe_state, next_key), (scores, metrics)
 
         final_state, scores_and_metrics = jax.lax.scan(
@@ -187,3 +197,19 @@ class QDSearchDNA(Task):
 
     def aggregate_metrics(self, metric_values: Dict[str, ArrayLike]):
         return metric_values
+
+
+def plot_2d_repertoire_jax_callback_wrapper(i, mpe_state, scores, bd_info):
+    repertoire = mpe_state
+
+    # The repertoire must have an accumulated shape of (outer_pop, inner_pop, ...), so we select
+    # the best one to plot it.
+
+    max_idx = scores.argmax()
+    best_repertoire = repertoire[max_idx]
+
+    bd_names = tuple(bd_info.keys())
+    bd_limits = tuple(bd_info.values())
+
+    fig, _ = _plot_2d_repertoire(best_repertoire, bd_limits, bd_names)
+    fig.savefig(f"plots/debug/best_repertoire-iter{i}.png")

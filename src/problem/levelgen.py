@@ -1,9 +1,8 @@
 import multiprocessing as mp
-
 from functools import partial
 from itertools import product
-from collections import deque
-from typing import Optional
+from collections import deque, OrderedDict
+from typing import Optional, OrderedDict, Tuple
 
 import numpy as np
 import jax
@@ -37,21 +36,11 @@ class ZeldaLevelGeneration(QDProblem):
         # self.n_doors = n_doors
 
     @property
-    def descriptor_length(self):
-        return 2
-
-    @property
-    def descriptor_names(self):
-        return ["path length", "symmetry"]
-
-    @property
-    def descriptor_min_val(self):
-        return 0.0, 0.0
-
-    @property
-    def descriptor_max_val(self):
-        # maximum path lengthl, maximum symmetry score
-        return self.height * self.width / 2 + self.width, self.height * self.width
+    def descriptor_info(self) -> OrderedDict[str, Tuple[float, ...]]:
+        return OrderedDict({
+            'path length': (0, self.height * self.width / 2 + self.width),
+            'symmetry': (0, self.height * self.width),
+        })
 
     @property
     def score_name(self):
