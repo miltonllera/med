@@ -165,13 +165,13 @@ class QDSearchDNA(Task):
             mpe_state, metrics = self.qd_algorithm.tell(dnas, scores, mpe_state)  # type: ignore
 
             # debugging stuff
-            # jax.debug.callback(
-            #     plot_2d_repertoire_jax_callback_wrapper,
-            #     i,
-            #     mpe_state,
-            #     self.scoring_function(metrics),
-            #     self.problem.descriptor_info
-            # )
+            jax.debug.callback(
+                plot_2d_repertoire_jax_callback_wrapper,
+                i,
+                mpe_state,
+                self.scoring_function(metrics),
+                self.problem.descriptor_info
+            )
 
             return (mpe_state, next_key), (scores, metrics)
 
@@ -209,7 +209,9 @@ def plot_2d_repertoire_jax_callback_wrapper(i, mpe_state, scores, bd_info):
     best_repertoire = repertoire[max_idx]
 
     bd_names = tuple(bd_info.keys())
-    bd_limits = tuple(bd_info.values())
+    bd_limits = tuple(zip(*bd_info.values()))
+
 
     fig, _ = _plot_2d_repertoire(best_repertoire, bd_limits, bd_names)
     fig.savefig(f"plots/debug/best_repertoire-iter{i}.png")
+    plt.close(fig)
