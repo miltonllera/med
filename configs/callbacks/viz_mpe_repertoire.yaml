@@ -1,4 +1,5 @@
-_target_: src.trainer.callback.QDMapVisualizer
-n_iters: ???
+_target_: src.trainer.callback.VisualizationCallback
+visualization: ${get_fn:src.analysis.qd.plot_2d_repertoire_callback_wrapper}"
 save_dir: ???
 save_prefix: ""
+run_on: [validation_iter_end]

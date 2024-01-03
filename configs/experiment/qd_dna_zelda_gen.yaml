@@ -55,6 +55,4 @@ callbacks:
     state_getter:
       _target_: src.trainer.evo.BestModelFromState
   viz_mpe_repertoire:
-    n_iters: ${task.n_iters}
     save_dir: ${paths.output_dir}/visualizations
-    measure_names: ["path length", "symmetry"]
