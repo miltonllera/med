@@ -69,14 +69,6 @@ class Checkpoint(Callback):
     def last_state(self):
         raise NotImplementedError
 
-    # def train_end(self, *_):
-    #     if self._ckpt_state is not None:
-    #         save_pytree(
-    #             self._ckpt_state,
-    #             self.save_dir,
-    #             self.file_template.format(iteration=self._ckpt_iter)
-    #         )
-
 
 class MonitorCheckpoint(Checkpoint):
     def __init__(
@@ -127,7 +119,7 @@ class MonitorCheckpoint(Checkpoint):
         # use the initial state as a sentinel
         self.update_checkpoints(0, -np.inf, state)
 
-    def validation_end(self, iter, metric, _, state) -> Any:
+    def validation_end(self, iter, metric, state) -> Any:
         if self.monitor_key is not None:
             try:
                 metric = metric[self.monitor_key]
@@ -182,7 +174,7 @@ class PeriodicCheckpoint(Checkpoint):
     def last_checpoint_state(self):
         return self._ckpt_state
 
-    def validation_end(self, iter, metric, _, state) -> None:
+    def validation_end(self, iter, metric, state) -> None:
         if iter % self.checkpoint_freq != 0:
             return
 
@@ -263,89 +255,3 @@ class VisualizationCallback(Callback):
             save_file = osp.join(self.save_dir, file_name)
             fig.savefig(save_file)
             plt.close(fig)
-
-
-# class QDMapVisualizer(Callback):
-#     def __init__(self, n_iters: int, save_dir: str, save_prefix: str = "", measure_names=None) -> None:
-#         super().__init__()
-#         self.n_iters = n_iters
-#         self.save_dir = save_dir
-#         self.save_prefix = save_prefix
-#         self.measure_names = [] if measure_names is None else measure_names
-#         os.makedirs(save_dir, exist_ok=True)
-
-#     def validation_end(
-#         self,
-#         iter,
-#         metrics: Dict[str, Float[Array, "..."]],
-#         extra_results: Tuple[MapElitesRepertoire, PyTree],
-#         _
-#     ) -> None:
-#         # Note: ignore the metrics in the function signature, those are averaged. We have to
-#         # select one repertoire and it's corresponding metrics to plot. Right now I am just
-#         # selecting the first one (of the last validation step), but this should be something
-#         # like median, min and max.
-#         repertoire, bd_limits = extra_results
-
-#         max_idx = repertoire.fitnesses.argmax()
-#         # min_idx = repertoire.fitnesses.argmin()
-#         # median_idx = jnp.argsort(repertoire.fitnesses)[len(repertoire.fitness)//2]
-
-#         max_repertoire = jtu.tree_map(lambda x: x[-1][max_idx], repertoire)
-#         # min_repertoire = jtu.tree_map(lambda x: x[-1][min_idx], repertoire)
-#         # median_repertoire = jtu.tree_map(lambda x: x[-1][median_idx], repertoire)
-
-#         # repertoires = [max_repertoire, median_repertoire, min_repertoire]
-#         repertoires = [max_repertoire]
-#         bd_limits = jtu.tree_map(lambda x: x[-1][0], bd_limits)  # limits is also repeated...
-
-#         for key, repertoire in zip(['max', 'min', 'median'], repertoires):
-#             fig, ax = plot_2d_repertoire(
-#                 repertoire,
-#                 *bd_limits
-#             )
-
-#             ax.set_xlabel(self.measure_names[0])
-#             ax.set_ylabel(self.measure_names[1])
-
-#             if self.save_prefix == "":
-#                 file_name = f"{key}-repertoire_iter-{iter}"
-#             else:
-#                 file_name = f"{self.save_prefix}_{key}-repertoire_{iter}"
-
-#             save_file = osp.join(self.save_dir, file_name)
-#             fig.savefig(save_file)
-#             plt.close(fig)
-
-
-# class QDOutputPlotter(Callback):
-#     def __init__(self, save_dir: str, save_prefix: str = "") -> None:
-#         super().__init__()
-#         self.save_dir = save_dir
-#         self.save_prefix = save_prefix
-
-#     def validation_end(self,
-#         iter,
-#         metrics: Dict[str, Float[Array, "..."]],
-#         extra_results: Tuple[Float[Array, "..."], MapElitesRepertoire, PyTree],
-#         _
-#     ) -> None:
-#         outputs, repertoire = extra_results[:2]
-
-#         # take the last one of the evlaution iters
-#         outputs = outputs[-1]
-#         # max_idx = repertoire.fitnesses.argmax()
-#         n_models, _, n_maps = outputs.shape[:3]
-
-#         rand_model_idx = np.random.randint(0, n_models)
-#         rand_map_idx = np.random.randint(0, n_maps)
-#         rand_map = outputs[rand_model_idx, -1, rand_map_idx]
-
-#         rand_map = np.transpose(np.asarray(rand_map), (1, 2, 0)).argmax(axis=-1).astype(np.float32)
-
-#         fig = plt.gcf()
-
-#         plt.imshow(rand_map)
-
-#         fig.savefig(osp.join(self.save_dir, f"random_map-iteration_{iter}"))
-#         plt.close(fig)

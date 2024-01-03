@@ -5,8 +5,10 @@ from jaxtyping import Float, Array
 
 import matplotlib.pyplot as plt
 
+from .callback import Callback
 
-class Logger(ABC):
+
+class Logger(Callback, ABC):
     def __init__(self) -> None:
         self.owner = None
         self.callbacks = None
@@ -35,6 +37,20 @@ class TensorboardLogger(Logger):
     def __init__(self, log_dir: str) -> None:
         super().__init__()
         self.summary_writer = SummaryWriter(log_dir)
+
+    def train_iter_end(self, iter, log_dict, _):
+        self.log_dict(log_dict, iter)
+
+    def train_end(self, *_):
+        self.finalize()
+
+    def validation_end(self, iter, log_dict, _):
+        self.log_dict(log_dict, iter)
+        self.finalize()
+
+    def test_end(self, iter, log_dict, _):
+        self.log_dict(log_dict, iter)
+        self.finalize()
 
     def log_scalar(self, key, value, step):
         if not isinstance(value, list):

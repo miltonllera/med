@@ -36,9 +36,7 @@ class EvoTrainer(Trainer):
         if eval_freq is None:
             eval_freq = steps
 
-        super().__init__(
-            task, steps, eval_steps, eval_freq, logger, callbacks, use_progress_bar
-        )
+        super().__init__( task, steps, eval_steps, eval_freq, logger, callbacks, use_progress_bar)
 
         self.strategy = strategy
         self.strategy_params = strategy_params
@@ -59,19 +57,9 @@ class EvoTrainer(Trainer):
         params, statics = split_model(model)
         strategy, strategy_params = self.init_strategy(params)
 
-        def _eval_fn(params, task_state, key):
+        def eval_fn(params, task_state, key):
             m = eqx.combine(params, statics)
             return self.task.eval(m, task_state, key)
-
-        if self.n_repeats > 1:
-            def eval_fn(params, task_state, key):
-                fits = jax.vmap(_eval_fn, in_axes=(None, None, 0))(
-                    params, task_state, key=jr.split(key, self.n_repeats)
-                ) #(nrep, pop)"
-
-                return jnp.mean(fits, axis=0) #(pop,)
-        else:
-            eval_fn = _eval_fn
 
         def evo_step(carry, _):
             es_state, task_state, key = carry
@@ -79,7 +67,8 @@ class EvoTrainer(Trainer):
 
             params, es_state = strategy.ask(ask_key, es_state, strategy_params)
 
-            fitness, task_state = jax.vmap(eval_fn, in_axes=(0, None, None))(
+            # log_dict should at least contain the same value as fitness but wrapped in a dict.
+            fitness, (log_dict, task_state) = jax.vmap(eval_fn, in_axes=(0, None, None))(
                 params, task_state, eval_key
             )
 
@@ -91,9 +80,9 @@ class EvoTrainer(Trainer):
 
             es_state = strategy.tell(params, fitness, es_state, strategy_params)
 
-            return (es_state, task_state, key), fitness
+            return (es_state, task_state, key), log_dict
 
-        def _validation_fn(params, task_state, key):
+        def validation_fn(params, task_state, key):
             m = eqx.combine(params, statics)
             return self.task.validate(m, task_state, key)
 
@@ -103,7 +92,7 @@ class EvoTrainer(Trainer):
 
             params, _ = strategy.ask(ask_key, es_state, strategy_params)
 
-            results, task_state = jax.vmap(_validation_fn, in_axes=(0, None, None))(
+            results, task_state = jax.vmap(validation_fn, in_axes=(0, None, None))(
                 params, task_state, val_key
             )
 
@@ -165,7 +154,7 @@ class EvoTrainer(Trainer):
 
         else:
             task_key, loop_key = jr.split(key)
-            task_state = self.task.init("test", None, task_key)
+            task_state = self.task.init("test", trainer_state[1], task_key)
 
             state = model, task_state, loop_key
 
@@ -182,29 +171,13 @@ class EvoTrainer(Trainer):
 
         return strategy, strategy_params
 
-    def format_training_results(self, fitness_or_loss):
+    def format_results(self, stage, metrics_or_scores):
+        metrics_or_scores = super().format_results(stage, metrics_or_scores)
+
         # Unlike backprop training, 'fitness_or_loss' is over a population instead of a single
         # set of parameters. We thus convert it to several quantities of interest:
-        if self.task.mode == "max":
-            key = "fitness"
-        else:
-            key = "loss"
-
-        return {
-            f'train/{key}_min': jnp.min(fitness_or_loss, axis=1),
-            f'train/{key}_max': jnp.max(fitness_or_loss, axis=1),
-            f'train/{key}_mean': jnp.mean(fitness_or_loss, axis=1),
-            f'train/{key}_var': jnp.var(fitness_or_loss, axis=1)
-        }
-
-    def format_metrics(self, stage, metrics):
-        """
-        Since the base method adds the stage name in front of the names, this one only needs to
-        compute the population statistics of interest: mean, variance, minimum and maximum
-        """
-        metrics_dict_raw = super().format_metrics(stage, metrics)
         metrics_dict = {}
-        for k, v in metrics_dict_raw.items():
+        for k, v in metrics_or_scores.items():
             metrics_dict.update({
                 f"{k}_min": jnp.min(v).item(),
                 f"{k}_max": jnp.max(v).item(),
@@ -220,6 +193,7 @@ class EvoTrainer(Trainer):
             ckpt = [c for c in self.callbacks if isinstance(c, MonitorCheckpoint)]
             if len(ckpt) > 0:
                 state = ckpt[0].best_state
+                return state
         else:
             return strategy.param_reshaper.reshape_single(state[0].best_member)
 

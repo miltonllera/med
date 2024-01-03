@@ -1,24 +1,27 @@
-from typing import Any, Callable, Dict, Tuple, Optional
+from typing import Callable, Dict, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import matplotlib.pyplot as plt
 from jaxtyping import PyTree, ArrayLike, Float, Array
-from qdax.core.containers.mapelites_repertoire import compute_cvt_centroids
-
-# from qdax.utils.metrics import default_qd_metrics
 
 from src.problem.base import QDProblem
 from src.task.base import Task
 from src.model.base import FunctionalModel
 from src.nn.dna import DNADistribution
-from src.evo.qd import MAPElites, qd_score_x_coverage
+from src.evo.qd import (
+    MapElitesRepertoire,
+    MAPElites,
+    SCORING_FUNCTION,
+    qd_score_x_coverage,
+    compute_cvt_centroids
+)
 from src.analysis.qd import _plot_2d_repertoire
 
 from src.utils import jax_partial
 
 
-SCORING_FN = Callable[[Any, jr.KeyArray], Tuple]
 QD_ALGORITHM = MAPElites  # Use Union to add more algorithms later
 
 
@@ -43,7 +46,7 @@ class QDSearchDNA(Task):
         popsize: int,
         n_centroids: int =1000,
         n_centroid_samples: Optional[int] = None,
-        scoring_function: Callable[[Dict[str, Array]], float] = qd_score_x_coverage,
+        scoring_function: SCORING_FUNCTION  = qd_score_x_coverage,
         dna_variance_coefficient: float = 1.0,
     ) -> None:
         if n_centroid_samples is None:
@@ -73,14 +76,12 @@ class QDSearchDNA(Task):
         self,
         model_and_dna: Tuple[FunctionalModel, DNADistribution],
         metrics: Dict[str, Float[Array, "..."]],
+        repertoire: MapElitesRepertoire,
         key
     ):
-        # qd_score = metrics['qd_score'][-1]
-        # coverage = metrics['coverage'][-1]
-
         # # coverage is a percetange, normalize it to (0, 1)
         # aggregated_qd_score = qd_score * coverage / 100
-        aggregated_qd_score = self.scoring_function(metrics)
+        aggregated_qd_score = self.scoring_function(metrics, repertoire)
 
         # assume dna_samples are distributions over possible strings, so it has shape
         # (pop_size, string length * alphabet size)
@@ -105,13 +106,15 @@ class QDSearchDNA(Task):
         key
     ):
         predict_key, fitness_key = jr.split(key)
-        (_, metrics), _ = self.predict(model_and_dna, centroids, predict_key)  # type: ignore
+        (_, metrics), (mpe_state, _) = self.predict(
+            model_and_dna, centroids, predict_key
+        )  # type: ignore
 
-        fitness, _ = self.overall_fitness(model_and_dna, metrics, fitness_key)
-        # total_score = self.score_to_coverage_ratio * qd_score + coverage
-        # currently this is not working, introduce some term that maximizes variation amongst dnas...
+        fitness, _ = self.overall_fitness(
+            model_and_dna, metrics, mpe_state[0], fitness_key  # mpe_state[0] == repertoire
+        )  # type: ignore
 
-        return fitness, centroids
+        return fitness, (dict(fitness=fitness), centroids)
 
     @jax_partial
     def validate(
@@ -122,17 +125,18 @@ class QDSearchDNA(Task):
     ):
         predict_key, fitness_key = jr.split(key)
 
-        (_, metrics), (mpe_state, _) = self.predict(model_and_dna, centroids, key) # type: ignore
+        (_, metrics), (mpe_state, _) = self.predict(
+            model_and_dna, centroids, predict_key
+        ) # type: ignore
 
-        fitness, individual_terms = self.overall_fitness(model_and_dna, metrics, fitness_key)
+        fitness, individual_terms = self.overall_fitness(
+            model_and_dna, metrics, mpe_state, fitness_key
+        ) # type: ignore
 
         metrics['fitness'] = fitness
         metrics =  {**metrics, **individual_terms}
 
-        bd_info = self.problem.descriptor_info
-        repertoire = mpe_state[0]
-
-        extra_results = (repertoire, bd_info)
+        extra_results = (mpe_state[0], self.problem.descriptor_info)  # mpe_state[0] == repertoire
 
         return (metrics, extra_results), centroids
 
@@ -141,16 +145,16 @@ class QDSearchDNA(Task):
         model, dna_gen = model_and_dna
 
         @jax.vmap
-        def _eval(genotype, key):
+        def generate_from_dna(genotype, key):
             output, _ = model(genotype, key)
-            return self.problem(output)
+            return self.problem(output), output
 
         # Create the ME initial state
         dna_key, score_init_key, mpe_key = jr.split(key, 3)
 
         dnas = dna_gen(self.popsize, key=dna_key).reshape(self.popsize, -1)
 
-        scores = _eval(dnas, jr.split(score_init_key, self.popsize))
+        scores = generate_from_dna(dnas, jr.split(score_init_key, self.popsize))
 
         mpe_state = self.qd_algorithm.init(dnas, centroids, scores, mpe_key)
 
@@ -161,7 +165,7 @@ class QDSearchDNA(Task):
             eval_key, next_key = jr.split(key)
 
             dnas = self.qd_algorithm.ask(mpe_state)
-            scores = _eval(dnas, jr.split(eval_key, self.popsize))
+            scores, outputs = generate_from_dna(dnas, jr.split(eval_key, self.popsize))
             mpe_state, metrics = self.qd_algorithm.tell(dnas, scores, mpe_state)  # type: ignore
 
             # debugging stuff
@@ -169,11 +173,11 @@ class QDSearchDNA(Task):
                 plot_2d_repertoire_jax_callback_wrapper,
                 i,
                 mpe_state,
-                self.scoring_function(metrics),
+                self.scoring_function(metrics, mpe_state[0]),
                 self.problem.descriptor_info
             )
 
-            return (mpe_state, next_key), (scores, metrics)
+            return (mpe_state, outputs, next_key), (scores, metrics)
 
         final_state, scores_and_metrics = jax.lax.scan(
             step_fn,
@@ -202,16 +206,12 @@ class QDSearchDNA(Task):
 def plot_2d_repertoire_jax_callback_wrapper(i, mpe_state, scores, bd_info):
     repertoire = mpe_state
 
-    # The repertoire must have an accumulated shape of (outer_pop, inner_pop, ...), so we select
-    # the best one to plot it.
-
     max_idx = scores.argmax()
     best_repertoire = repertoire[max_idx]
 
     bd_names = tuple(bd_info.keys())
     bd_limits = tuple(zip(*bd_info.values()))
 
-
     fig, _ = _plot_2d_repertoire(best_repertoire, bd_limits, bd_names)
-    fig.savefig(f"plots/debug/best_repertoire-iter{i}.png")
+    fig.savefig(f"plots/debug/best_repertoire-iter{i}.png")  # type: ignore
     plt.close(fig)
