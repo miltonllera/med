@@ -18,6 +18,11 @@ class PriorityItem:
 
 
 class PriorityQueue:
+    """
+    Wrapper around the min-heap implementation provided by the Python Standard Library using heqpq.
+    We use this to store checkpoints of models. Notice that because of this the highest priority
+    item is in fact the worst model i.e. the one that should leave the queue first.
+    """
     def __init__(self, max_cap: int, items):
         self.max_cap = max_cap
         self.items = [PriorityItem(*i) for i in items]
@@ -32,7 +37,7 @@ class PriorityQueue:
         return iter(self.items)
 
     @property
-    def lowest_priority(self):
+    def highest_priority(self):
         return self.items[0].priority
 
     def push_and_pop(self, item: Tuple[Union[float, int], Any]) -> Union[None, Tuple]:
@@ -46,14 +51,14 @@ class PriorityQueue:
         return value
 
 
-def save_pytree(model: PyTree, save_folder: str, save_name: str):
-    save_file = osp.join(save_folder, f"{save_name}.eqx")
-    eqx.tree_serialise_leaves(save_file, model)
-
-
-def load_pytree(save_folder: str,  file_name: str, template: PyTree):
+def save_pytree(pytree: PyTree, save_folder: str, file_name: str):
     save_file = osp.join(save_folder, f"{file_name}.eqx")
-    return eqx.tree_deserialise_leaves(save_file, template)
+    eqx.tree_serialise_leaves(save_file, pytree)
+
+
+def load_pytree(save_folder: str,  file_name: str, pytree_spec: PyTree):
+    save_file = osp.join(save_folder, f"{file_name}.eqx")
+    return eqx.tree_deserialise_leaves(save_file, pytree_spec)
 
 
 def progress_bar_scan(num_samples, message=None):

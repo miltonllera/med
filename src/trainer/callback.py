@@ -2,18 +2,22 @@ import os
 import os.path as osp
 from collections import deque
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, List, Literal, Optional, Union
 
 import numpy as np
-# import jax.numpy as jnp
-import jax.tree_util as jtu
 import matplotlib.pyplot as plt
-import equinox as eqx
-from qdax.core.containers.mapelites_repertoire import MapElitesRepertoire
-from jaxtyping import Float, Array, PyTree
 
 from src.trainer.utils import PriorityQueue, save_pytree, load_pytree
-from src.analysis.visualization import plot_2d_repertoire
+
+
+CALLBACK_HOOKS = Literal[
+    "train_iter_end",
+    "train_end",
+    "validation_iter_end",
+    "validaton_end",
+    "test_iter_end",
+    "test_end",
+]
 
 
 class Callback:
@@ -30,13 +34,19 @@ class Callback:
     def init(self, *_):
         pass
 
-    def train_loop_end(self, *_):
+    def train_iter_end(self, *_):
+        pass
+
+    def train_end(self, *_):
+        pass
+
+    def validation_iter_end(self, *_):
         pass
 
     def validation_end(self, *_):
         pass
 
-    def train_end(self, *_):
+    def test_iter_end(self, *_):
         pass
 
     def test_end(self, *_):
@@ -100,7 +110,7 @@ class MonitorCheckpoint(Checkpoint):
     def has_improved(self, metric):
         if len(self._ckpts) < self.k_best:
             return True
-        return metric > self._ckpts.lowest_priority
+        return metric > self._ckpts.highest_priority
 
     @property
     def best_state(self):
@@ -114,16 +124,25 @@ class MonitorCheckpoint(Checkpoint):
             self.state_getter.init(model, state)
         self._state_template = self.state_getter(state)
 
-    def validation_end(self, iter, metric, _, state) -> Any:
-        state = self.state_getter(state)
+        # use the initial state as a sentinel
+        self.update_checkpoints(0, -np.inf, state)
 
+    def validation_end(self, iter, metric, _, state) -> Any:
         if self.monitor_key is not None:
             try:
                 metric = metric[self.monitor_key]
             except KeyError as e:
                 e.add_note(f"Available keys are {metric.keys()}")
 
+        self.update_checkpoints(iter, metric, state)
+
+    def update_checkpoints(self, iter, metric, state):
+        state = self.state_getter(state)
+
+        # because checkpoints are stored in a min heap,
+        # we want the worst model to have the highest prioriy.
         priority = metric if self.mode == "max" else -metric
+
         if self.has_improved(priority):
             file = self.file_template.format(iteration=iter)
             to_delete = self._ckpts.push_and_pop((priority, file))
@@ -189,133 +208,144 @@ class PeriodicCheckpoint(Checkpoint):
         )
 
 
-# def backprop_optimizer_state(training_state):
-#     return training_state[1]
-
-
-# def search_task_optimizer_state(training_state):
-#     return training_state[2][1]
-
-
-# class LRMonitor(Callback):
-#     def __init__(self, state_indexer=None, key='lr_value'):
-#         if state_indexer is None:
-#             state_indexer = backprop_optimizer_state
-
-#         self.get_state = state_indexer
-#         self.lr_history = []
-#         self.key = key
-
-#     def train_loop_end(self, iteration, _, training_state):
-#         opt_state: optax.OptState = self.get_state(training_state)
-#         try:
-#             lr = opt_state.hyperparams['learning_rate'].item()  # type: ignore
-#             self._logger.log_scalar(self.key, iteration, lr)
-#         except AttributeError as e:
-#             e.add_note("Did you forget to use 'optax.inject_hyperparams'?")
-
-
 class VisualizationCallback(Callback):
     """
     wrapper class around visualization functions
     """
-    def __init__(self, visualization, dataset, save_dir: str, save_prefix: str = ""):
+    def __init__(
+        self,
+        visualization,
+        save_dir: str,
+        save_prefix: str = "",
+        run_on: Union[Literal["all"], List[CALLBACK_HOOKS]] = "all",
+    ):
         self.viz = visualization
-        self.dataset = dataset
         self.save_dir = save_dir
         self.save_prefix = save_prefix
+        self.run_on = run_on
+
         os.makedirs(save_dir)
 
-    def test_end(self, _, training_state) -> Any:
-        model = training_state[0]
-        model = eqx.tree_at(lambda x: x.output_dev_states, model, True)
-        self.viz(model, self.dataset, osp.join(self.save_dir, self.save_prefix))
+    def train_iter_end(self, *args, **kwargs):
+        self._plot("train_iter_end", *args, **kwargs)
 
-    # def validation_end(self, iter, metric, state) -> Any:
-    #     model = state[0].best_member
+    def train_end(self, *args, **kwargs):
+        self._plot("train_iter_end", *args, **kwargs)
 
+    def validation_iter_end(self, *args, **kwargs):
+        self._plot("train_iter_end", *args, **kwargs)
 
-class QDMapVisualizer(Callback):
-    def __init__(self, n_iters: int, save_dir: str, save_prefix: str = "", measure_names=None) -> None:
-        super().__init__()
-        self.n_iters = n_iters
-        self.save_dir = save_dir
-        self.save_prefix = save_prefix
-        self.measure_names = [] if measure_names is None else measure_names
-        os.makedirs(save_dir, exist_ok=True)
+    def validation_end(self, *args, **kwargs):
+        self._plot("train_iter_end", *args, **kwargs)
 
-    def validation_end(
-        self,
-        iter,
-        metrics: Dict[str, Float[Array, "..."]],
-        extra_results: Tuple[MapElitesRepertoire, PyTree],
-        _
-    ) -> None:
-        # Note: ignore the metrics in the function signature, those are averaged. We have to
-        # select one repertoire and it's corresponding metrics to plot. Right now I am just
-        # selecting the first one (of the last validation step), but this should be something
-        # like median, min and max.
-        repertoire, bd_limits = extra_results
+    def test_iter_end(self, *args, **kwargs):
+        self._plot("train_iter_end", *args, **kwargs)
 
-        max_idx = repertoire.fitnesses.argmax()
-        # min_idx = repertoire.fitnesses.argmin()
-        # median_idx = jnp.argsort(repertoire.fitnesses)[len(repertoire.fitness)//2]
+    def test_end(self, *args, **kwargs):
+        self._plot("train_iter_end", *args, **kwargs)
 
-        max_repertoire = jtu.tree_map(lambda x: x[-1][max_idx], repertoire)
-        # min_repertoire = jtu.tree_map(lambda x: x[-1][min_idx], repertoire)
-        # median_repertoire = jtu.tree_map(lambda x: x[-1][median_idx], repertoire)
+    def _plot(self, calling_hook: Literal[CALLBACK_HOOKS], *args, **kwargs):
+        if self.run_on != "all" and calling_hook not in self.run_on:
+            return
 
-        # repertoires = [max_repertoire, median_repertoire, min_repertoire]
-        repertoires = [max_repertoire]
-        bd_limits = jtu.tree_map(lambda x: x[-1][0], bd_limits)  # limits is also repeated...
+        plot_names, figures = self.viz(*args, **kwargs)
 
-        for key, repertoire in zip(['max', 'min', 'median'], repertoires):
-            fig, ax = plot_2d_repertoire(
-                repertoire,
-                *bd_limits
-            )
+        if not isinstance(plot_names, list):
+            plot_names = [plot_names]
+            figures = [figures]
 
-            ax.set_xlabel(self.measure_names[0])
-            ax.set_ylabel(self.measure_names[1])
-
+        for name, fig in zip(plot_names, figures):
             if self.save_prefix == "":
-                file_name = f"{key}-repertoire_iter-{iter}"
+                file_name = name
             else:
-                file_name = f"{self.save_prefix}_{key}-repertoire_{iter}"
+                file_name = f"{self.save_prefix}_{name}"
 
             save_file = osp.join(self.save_dir, file_name)
             fig.savefig(save_file)
             plt.close(fig)
 
 
-class QDOutputPlotter(Callback):
-    def __init__(self, save_dir: str, save_prefix: str = "") -> None:
-        super().__init__()
-        self.save_dir = save_dir
-        self.save_prefix = save_prefix
+# class QDMapVisualizer(Callback):
+#     def __init__(self, n_iters: int, save_dir: str, save_prefix: str = "", measure_names=None) -> None:
+#         super().__init__()
+#         self.n_iters = n_iters
+#         self.save_dir = save_dir
+#         self.save_prefix = save_prefix
+#         self.measure_names = [] if measure_names is None else measure_names
+#         os.makedirs(save_dir, exist_ok=True)
 
-    def validation_end(self,
-        iter,
-        metrics: Dict[str, Float[Array, "..."]],
-        extra_results: Tuple[Float[Array, "..."], MapElitesRepertoire, PyTree],
-        _
-    ) -> None:
-        outputs, repertoire = extra_results[:2]
+#     def validation_end(
+#         self,
+#         iter,
+#         metrics: Dict[str, Float[Array, "..."]],
+#         extra_results: Tuple[MapElitesRepertoire, PyTree],
+#         _
+#     ) -> None:
+#         # Note: ignore the metrics in the function signature, those are averaged. We have to
+#         # select one repertoire and it's corresponding metrics to plot. Right now I am just
+#         # selecting the first one (of the last validation step), but this should be something
+#         # like median, min and max.
+#         repertoire, bd_limits = extra_results
 
-        # take the last one of the evlaution iters
-        outputs = outputs[-1]
-        # max_idx = repertoire.fitnesses.argmax()
-        n_models, _, n_maps = outputs.shape[:3]
+#         max_idx = repertoire.fitnesses.argmax()
+#         # min_idx = repertoire.fitnesses.argmin()
+#         # median_idx = jnp.argsort(repertoire.fitnesses)[len(repertoire.fitness)//2]
 
-        rand_model_idx = np.random.randint(0, n_models)
-        rand_map_idx = np.random.randint(0, n_maps)
-        rand_map = outputs[rand_model_idx, -1, rand_map_idx]
+#         max_repertoire = jtu.tree_map(lambda x: x[-1][max_idx], repertoire)
+#         # min_repertoire = jtu.tree_map(lambda x: x[-1][min_idx], repertoire)
+#         # median_repertoire = jtu.tree_map(lambda x: x[-1][median_idx], repertoire)
 
-        rand_map = np.transpose(np.asarray(rand_map), (1, 2, 0)).argmax(axis=-1).astype(np.float32)
+#         # repertoires = [max_repertoire, median_repertoire, min_repertoire]
+#         repertoires = [max_repertoire]
+#         bd_limits = jtu.tree_map(lambda x: x[-1][0], bd_limits)  # limits is also repeated...
 
-        fig = plt.gcf()
+#         for key, repertoire in zip(['max', 'min', 'median'], repertoires):
+#             fig, ax = plot_2d_repertoire(
+#                 repertoire,
+#                 *bd_limits
+#             )
 
-        plt.imshow(rand_map)
+#             ax.set_xlabel(self.measure_names[0])
+#             ax.set_ylabel(self.measure_names[1])
 
-        fig.savefig(osp.join(self.save_dir, f"random_map-iteration_{iter}"))
-        plt.close(fig)
+#             if self.save_prefix == "":
+#                 file_name = f"{key}-repertoire_iter-{iter}"
+#             else:
+#                 file_name = f"{self.save_prefix}_{key}-repertoire_{iter}"
+
+#             save_file = osp.join(self.save_dir, file_name)
+#             fig.savefig(save_file)
+#             plt.close(fig)
+
+
+# class QDOutputPlotter(Callback):
+#     def __init__(self, save_dir: str, save_prefix: str = "") -> None:
+#         super().__init__()
+#         self.save_dir = save_dir
+#         self.save_prefix = save_prefix
+
+#     def validation_end(self,
+#         iter,
+#         metrics: Dict[str, Float[Array, "..."]],
+#         extra_results: Tuple[Float[Array, "..."], MapElitesRepertoire, PyTree],
+#         _
+#     ) -> None:
+#         outputs, repertoire = extra_results[:2]
+
+#         # take the last one of the evlaution iters
+#         outputs = outputs[-1]
+#         # max_idx = repertoire.fitnesses.argmax()
+#         n_models, _, n_maps = outputs.shape[:3]
+
+#         rand_model_idx = np.random.randint(0, n_models)
+#         rand_map_idx = np.random.randint(0, n_maps)
+#         rand_map = outputs[rand_model_idx, -1, rand_map_idx]
+
+#         rand_map = np.transpose(np.asarray(rand_map), (1, 2, 0)).argmax(axis=-1).astype(np.float32)
+
+#         fig = plt.gcf()
+
+#         plt.imshow(rand_map)
+
+#         fig.savefig(osp.join(self.save_dir, f"random_map-iteration_{iter}"))
+#         plt.close(fig)

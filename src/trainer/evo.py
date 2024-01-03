@@ -126,8 +126,7 @@ class EvoTrainer(Trainer):
             metrics, task_state = self.task.validate(model, task_state, test_key)
             return (model, task_state, key), metrics
 
-        best_parameters = self.get_best_model(trainer_state, strategy)
-        best_model = model.set_parameters(best_parameters)
+        best_model = self.get_best_model(trainer_state, strategy)
 
         self._test_loop(
             best_model,
@@ -166,7 +165,7 @@ class EvoTrainer(Trainer):
 
         else:
             task_key, loop_key = jr.split(key)
-            task_state = self.task.init("test", task_key)
+            task_state = self.task.init("test", None, task_key)
 
             state = model, task_state, loop_key
 
@@ -221,7 +220,8 @@ class EvoTrainer(Trainer):
             ckpt = [c for c in self.callbacks if isinstance(c, MonitorCheckpoint)]
             if len(ckpt) > 0:
                 state = ckpt[0].best_state
-        return strategy.param_reshaper.reshape_single(state[0].best_member)
+        else:
+            return strategy.param_reshaper.reshape_single(state[0].best_member)
 
 
 def split_model(model: Union[FunctionalModel, Tuple[FunctionalModel, ...]]) -> Tuple[PyTree, ...]:
