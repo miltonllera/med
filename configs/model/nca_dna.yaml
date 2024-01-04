@@ -58,6 +58,6 @@ nca:
     end_idx: 1
     # must either be a valid tile or an invalid one.
     squashing_function:
-      _target_: jax.nn.softmax
+      _target_: jax.numpy.argmax
       _partial_: True
       axis: 0

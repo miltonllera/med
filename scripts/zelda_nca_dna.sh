@@ -32,6 +32,7 @@
 #   +task.qd_algorithm.emitter.genotype_dim=32 \
 #   +model@model.dna=dna_iid_sampler
 
+# maximize pairwise correspondance between genotypes and phontypes
 CUDA_VISIBLE_DEVICES="1" python -m bin.train \
   experiment=qd_dna_zelda_gen \
   qd@task.qd_algorithm=cmame \

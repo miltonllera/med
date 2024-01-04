@@ -91,7 +91,6 @@ class ZeldaLevelGeneration(QDProblem):
         return {"dummy": jnp.empty(0)}
 
     def __call__(self, inputs):
-        inputs = inputs.argmax(axis=0)
         return super().__call__(inputs)
 
 
