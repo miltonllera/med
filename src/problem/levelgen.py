@@ -91,16 +91,16 @@ class ZeldaLevelGeneration(QDProblem):
         return {"dummy": jnp.empty(0)}
 
     def __call__(self, inputs):
-        # Note that because the callbacks above are using vectorization, they will sync over all
-        # vmaps applied. In our case, this should be one for the trainer and one for the task, so
-        # two leading batch dimensions.
-        inputs = inputs.argmax(axis=2)
+        inputs = inputs.argmax(axis=0)
         return super().__call__(inputs)
 
 
 directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
 
 def batched_n_islands(int_maps):
+    # Note that because the callbacks above are using vectorization, they will sync over all
+    # vmaps applied. Thus there could be 1 or 2 leading dimenisions if we are evaluating a model
+    # if this is caleld as part of evolutionary training.
     if len(int_maps.shape) == 3:
         batch_shapes = int_maps.shape[:1]
     else:
@@ -154,6 +154,9 @@ def n_islands(int_map: np.ndarray, non_traversible_tiles=(0,)):
 
 
 def batched_lsp(int_maps):
+    # Note that because the callbacks above are using vectorization, they will sync over all
+    # vmaps applied. Thus there could be 1 or 2 leading dimenisions if we are evaluating a model
+    # if this is caleld as part of evolutionary training.
     if len(int_maps.shape) == 3:  # when analysing a model we do not have an extra leading dim
         batch_shapes = int_maps.shape[:1]
     else:
