@@ -31,7 +31,7 @@ class Callback:
     def attach_logger(self, logger):
         self._logger = logger
 
-    def init(self, *_):
+    def train_start(self, *_):
         pass
 
     def train_iter_end(self, *_):
@@ -40,10 +40,16 @@ class Callback:
     def train_end(self, *_):
         pass
 
+    def validation_start(self, *_):
+        pass
+
     def validation_iter_end(self, *_):
         pass
 
     def validation_end(self, *_):
+        pass
+
+    def test_init(self, *_):
         pass
 
     def test_iter_end(self, *_):
@@ -109,15 +115,15 @@ class MonitorCheckpoint(Checkpoint):
         best_state_file = max(self._ckpts).item
         return load_pytree(self.save_dir, best_state_file, self._state_template)
 
-    def init(self, model, state):
+    def train_start(self, total_steps, model, initial_trainer_state):
         os.makedirs(self.save_dir, exist_ok=True)
 
         if self.state_getter is not None:
-            self.state_getter.init(model, state)
-        self._state_template = self.state_getter(state)
+            self.state_getter.init(model, initial_trainer_state)
+        self._state_template = self.state_getter(initial_trainer_state)
 
         # use the initial state as a sentinel
-        self.update_checkpoints(0, -np.inf, state)
+        self.update_checkpoints(0, -np.inf, initial_trainer_state)
 
     def validation_end(self, iter, metric, state) -> Any:
         if self.monitor_key is not None:

@@ -10,18 +10,10 @@ from jax.random import KeyArray, split as split_key
 from src.trainer.callback import Callback
 from src.trainer.logger import Logger
 from src.task.base import Task
+from src.utils import tree_stack
 
 
 _logger = getLogger(__name__)
-
-
-def tree_stack(trees):
-    return jtu.tree_map(lambda *v: jnp.stack(v), *trees)
-
-
-def tree_unstack(tree):
-    leaves, treedef = jtu.tree_flatten(tree)
-    return [treedef.unflatten(leaf) for leaf in zip(*leaves, strict=True)]
 
 
 class Trainer(ABC):
@@ -50,6 +42,8 @@ class Trainer(ABC):
         if eval_freq is None:
             eval_freq = eval_steps
 
+        # if use_progress_bar and
+
         self.task = task
         self.steps = steps
         self.eval_steps = eval_steps
@@ -76,7 +70,7 @@ class Trainer(ABC):
         return {f"{stage}/{k}": v for (k, v) in metrics_dict.items()}
 
     def _fit_loop(self, model, train_step, val_step, *, key, **kwargs):
-        _logger.info("Training is starting")
+        _logger.info("Training is starting...")
 
         if self._jit_step_fns:
             train_step = eqx.filter_jit(train_step)
@@ -88,8 +82,7 @@ class Trainer(ABC):
 
         init_key, key = split_key(key)
         train_state = self.init("train", model, None, key=init_key, **kwargs)
-
-        self.run_logger_and_callbacks('init', model, train_state)
+        self.run_logger_and_callbacks('train_start', self.steps, model, train_state)
 
         for i in range(self.steps):
             train_state, fitness_or_loss = train_step(train_state, i)
@@ -98,69 +91,61 @@ class Trainer(ABC):
 
             self.run_logger_and_callbacks("train_iter_end", i, log_dict, train_state)
 
-            if i % self.val_freq == 0:
+            if ((i + 1) % self.val_freq) == 0:
                 key, val_key = split_key(key)
-
                 self._val_loop(val_step, model, train_state, val_key, **kwargs)
 
         self.run_logger_and_callbacks("train_end", self.steps, train_state)
-
-        _logger.info("Training completed")
+        _logger.info("Training completed.")
 
         return train_state
 
     def _val_loop(self, val_step, model, trainer_state, key, **kwargs):
         val_state = self.init("val", model, trainer_state, key=key, **kwargs)
 
-        accumulated_metrics = []
+        self.run_logger_and_callbacks('validation_start', self.eval_steps, model, val_state)
 
+        metrics_hist = []
         for i in range(self.eval_steps):
-            val_state, (metrics, extra_results) = val_step(val_state, i)
+            val_state, (step_metrics, extra_results) = val_step(val_state, i)
 
-            accumulated_metrics.append(metrics)
-            log_dict = self.format_results("val", metrics)
+            metrics_hist.append(step_metrics)
+            log_dict = self.format_results("val", step_metrics)
 
             self.run_logger_and_callbacks(
                 "validation_iter_end", i, log_dict, val_state, extra_results
             )
 
-        accumulated_metrics = jtu.tree_map(
-            lambda x: jnp.mean(x, axis=1), tree_stack(accumulated_metrics)
-        )
-        accumulated_metrics = self.format_results("val", accumulated_metrics)
+        metrics_hist = jtu.tree_map(lambda x: jnp.mean(x, axis=1), tree_stack(metrics_hist))
+        metrics_hist = self.format_results("val", metrics_hist)
 
-        self.run_logger_and_callbacks(
-            "validation_end", self.eval_steps, accumulated_metrics, val_state
-        )
+        self.run_logger_and_callbacks("validation_end", self.eval_steps, metrics_hist, val_state)
 
     def _test_loop(self, model, test_step, trainer_state, *, key, **kwargs):
         # if self.use_progress_bar:
         #     test_step = progress_bar_scan(self.eval_steps)(test_step)
 
-        _logger.info("Test started")
+        _logger.info("Test started...")
 
         if self._jit_step_fns:
             test_step = eqx.filter_jit(test_step)
 
         test_state = self.init("test", model, trainer_state, key=key, **kwargs)
+        self.run_logger_and_callbacks('test_start', self.eval_steps, model, test_state)
 
-        accumulated_metrics = []
-
+        metrics_hist = []
         for i in range(self.eval_steps):
-            test_state, (metrics, extra_results) = test_step(test_state, i)
+            test_state, (step_metrics, extra_results) = test_step(test_state, i)
 
-            accumulated_metrics.append(metrics)
-            log_dict = self.format_results("test", metrics)
+            metrics_hist.append(step_metrics)
+            log_dict = self.format_results("test", step_metrics)
 
             self.run_logger_and_callbacks("test_iter_end", i, log_dict, test_state, extra_results)
 
-        accumulated_metrics = jtu.tree_map(
-            lambda x: jnp.mean(x, axis=0), tree_stack(accumulated_metrics)
-        )
-        accumulated_metrics = self.format_results("val", accumulated_metrics)
+        metrics_hist = jtu.tree_map(lambda x: jnp.mean(x, axis=0), tree_stack(metrics_hist))
+        metrics_hist = self.format_results("val", metrics_hist)
 
-        self.run_logger_and_callbacks("test_end", self.eval_steps, accumulated_metrics, test_state)
-
+        self.run_logger_and_callbacks("test_end", self.eval_steps, metrics_hist, test_state)
         _logger.info("Test completed.")
 
     def run_logger_and_callbacks(self, hook_name: str, *args):
