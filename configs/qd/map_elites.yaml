@@ -3,7 +3,6 @@ defaults:
 
 _target_: src.evo.qd.MAPElites
 
-
 metrics_function:
   _target_: qdax.utils.metrics.default_qd_metrics
   _partial_: True

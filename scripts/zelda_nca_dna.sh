@@ -12,8 +12,9 @@
 #   +model@model.dna=dna_list model.dna.n_dnas=\${task.popsize}
 
 # nca + dna sampler (using CMA emitter in the inner loop)
-# CUDA_VISIBLE_DEVICES="2" python -m bin.train \
+# CUDA_VISIBLE_DEVICES="0" python -m bin.train \
 #   experiment=qd_dna_zelda_gen \
+#   task.n_iters=50 \
 #   qd@task.qd_algorithm=cmame  \
 #   +task.qd_algorithm.emitter.genotype_dim=32 \
 #   +model@model.dna=dna_iid_sampler \
@@ -24,9 +25,16 @@
 #   +task.qd_algorithm.emitter.genotype_dim=32 \
 #   +model@model.dna=dna_iid_sampler
 #
-CUDA_VISIBLE_DEVICES="0" python -m bin.train \
+# CUDA_VISIBLE_DEVICES="1" python -m bin.train \
+#   experiment=qd_dna_zelda_gen \
+#   qd@task.qd_algorithm=cmame \
+#   +qd/score_aggregator@task.score_aggregator=coverage_only \
+#   +task.qd_algorithm.emitter.genotype_dim=32 \
+#   +model@model.dna=dna_iid_sampler
+
+CUDA_VISIBLE_DEVICES="1" python -m bin.train \
   experiment=qd_dna_zelda_gen \
   qd@task.qd_algorithm=cmame \
-  +qd/scoring_function@task.scoring_function=coverage_only \
+  +qd/score_aggregator@task.score_aggregator=score_plus_pairwise_consistency \
   +task.qd_algorithm.emitter.genotype_dim=32 \
   +model@model.dna=dna_iid_sampler

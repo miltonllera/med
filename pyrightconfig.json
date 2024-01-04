@@ -1,5 +1,5 @@
 {
+   "python.analysis.useLibraryCodeForTypes" : false,
    "venv" : "growjax",
-   "venvPath" : "/Users/mlle/.local/bin/pyenv/versions",
-   "python.analysis.useLibraryCodeForTypes":  false
+   "venvPath" : "/Users/mlle/.local/bin/pyenv/versions"
 }
