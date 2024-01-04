@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 from qdax.core.map_elites import EmitterState, Emitter, MapElitesRepertoire, MAPElites as BaseME
@@ -110,7 +111,7 @@ class MAPElites(BaseME):
         return (repertoire, emitter_state, key), metrics
 
 
-#---------------------------------- Emitters ---------------------------------------
+#------------------------------------------- Emitters ---------------------------------------------
 
 class CMAOptEmitter(CMAOptEmitterBase):
     """
@@ -132,9 +133,18 @@ class CMAOptEmitter(CMAOptEmitterBase):
         super().__init__(batch_size, genotype_dim, dummy_centroids, sigma_g, min_count, max_count)
 
 
-#-------------------------------- Scoring Function ---------------------------------
+#---------------------------------------- Scoring Function ----------------------------------------
+
+# Functions to compute overall scores for the QD process.
+# The scoring functions aggregates values from the scores generated for the QD maps.
+# Genotype to phonotype evaluators compute a value associated *for the mapping process itself*.
+# They do not evaluate the quality phenotypes as this is already computed by the repertoire.
+
 
 SCORING_FUNCTION = Callable[[Metrics, MapElitesRepertoire], float]
+GENOTYPE_TO_PHENOTYPE_EVALUATOR = Callable[
+    [Genotype, Float[Array, "..."], MapElitesRepertoire], float
+]
 
 
 def coverage_only(qd_metrics, repertoire):
@@ -156,3 +166,42 @@ def qd_score_x_coverage(qd_metrics, repertoire):
 
     # coverage is a percetange, normalize it to (0, 1)
     return qd_score * coverage / 100
+
+
+def genotype_to_phenotype_pairwise_difference(genotype, phenotypes, repertoire):
+    def similarity(arr1, arr2):
+        return (arr1 == arr2).sum() / jnp.size(arr1)
+
+    def for_iter_sim(g):
+        # g's shape is (pop_size, ...): because we wish to perform paiirwise similarity we
+        # apply vmap over the first imput and rely on broadcasting.
+        return jax.vmap(similarity, in_axes=(0, None))(g, g)
+
+    # Here both genotype and phenotype have shape (n_iters, pop_size, ...)
+    # the first vmap applies the function over iterations
+    pairwise_genotype_similarity = jax.vmap(for_iter_sim)(genotype)
+    pairwise_phenotype_similarity = jax.vmap(for_iter_sim)(phenotypes)
+
+    return -(pairwise_genotype_similarity - pairwise_phenotype_similarity).mean()
+
+
+class QDScoreAggregator:
+    def __init__(
+        self,
+        metric_aggregator: SCORING_FUNCTION = qd_score_x_coverage,
+        genotype_to_phenotype_evaluator: GENOTYPE_TO_PHENOTYPE_EVALUATOR = lambda *_: 0.0,
+        importance_coefficient: float = 1.0,
+    ) -> None:
+        self.metric_aggregator = metric_aggregator
+        self.genotype_to_phenotype_evaluator = genotype_to_phenotype_evaluator
+        self.importance_coefficient = importance_coefficient
+
+    def __call__(
+        self,
+        genotype_and_phenotype: Tuple[Genotype, Float[Array, "..."]],
+        qd_metrics: Metrics,
+        repertoire: MapElitesRepertoire
+    ):
+        qd_score = self.metric_aggregator(qd_metrics, repertoire)
+        mapping_score = self.genotype_to_phenotype_evaluator(*genotype_and_phenotype, repertoire)
+        return qd_score + self.importance_coefficient * mapping_score

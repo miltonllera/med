@@ -1,0 +1,2 @@
+_target_: src.evo.qd.QDScoreAggregator
+metric_aggregator: ${get_fn:src.evo.qd.coverage_only}

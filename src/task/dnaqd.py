@@ -13,7 +13,8 @@ from src.nn.dna import DNADistribution
 from src.evo.qd import (
     MapElitesRepertoire,
     MAPElites,
-    SCORING_FUNCTION,
+    QDScoreAggregator,
+    genotype_to_phenotype_pairwise_difference,
     qd_score_x_coverage,
     compute_cvt_centroids
 )
@@ -46,11 +47,16 @@ class QDSearchDNA(Task):
         popsize: int,
         n_centroids: int =1000,
         n_centroid_samples: Optional[int] = None,
-        scoring_function: SCORING_FUNCTION  = qd_score_x_coverage,
+        score_aggregator: Optional[QDScoreAggregator] = None,
         dna_variance_coefficient: float = 1.0,
     ) -> None:
         if n_centroid_samples is None:
             n_centroid_samples = problem.descriptor_length * n_centroids
+
+        if score_aggregator is None:
+            score_aggregator = QDScoreAggregator(
+                qd_score_x_coverage, genotype_to_phenotype_pairwise_difference
+            )
 
         self.problem = problem
         self.qd_algorithm = qd_algorithm
@@ -58,7 +64,7 @@ class QDSearchDNA(Task):
         self.popsize = popsize
         self.n_centroids = n_centroids
         self.n_centroid_samples = n_centroid_samples  # type: ignore
-        self.scoring_function = scoring_function
+        self.score_aggregator = score_aggregator
         self.dna_variance_coefficient = dna_variance_coefficient
 
     @property
@@ -74,19 +80,17 @@ class QDSearchDNA(Task):
     @jax_partial
     def overall_fitness(
         self,
-        model_and_dna: Tuple[FunctionalModel, DNADistribution],
+        genotypes_and_phenotypes: Tuple[Array, PyTree],
         metrics: Dict[str, Float[Array, "..."]],
         repertoire: MapElitesRepertoire,
-        key
+        key: jr.PRNGKeyArray,
     ):
-        # # coverage is a percetange, normalize it to (0, 1)
-        # aggregated_qd_score = qd_score * coverage / 100
-        aggregated_qd_score = self.scoring_function(metrics, repertoire)
+        aggregated_qd_score = self.score_aggregator(genotypes_and_phenotypes, metrics, repertoire)
 
-        # assume dna_samples are distributions over possible strings, so it has shape
-        # (pop_size, string length * alphabet size)
-        dna_sample = model_and_dna[1](self.popsize, key=key).reshape(self.popsize, -1)
-        dna_variance = dna_sample.var()
+        # DNA samples have shape (n_iters, pop_size, n_features)
+        # compute variance across population, average over qd iterations
+        dna_samples = genotypes_and_phenotypes[0]
+        dna_variance = dna_samples.var(axis=(1, 2)).mean()
 
         individual_terms = {
             'aggregated_qd_score': aggregated_qd_score,
@@ -105,13 +109,15 @@ class QDSearchDNA(Task):
         centroids: PyTree,
         key
     ):
-        predict_key, fitness_key = jr.split(key)
-        (_, metrics), (mpe_state, _) = self.predict(
-            model_and_dna, centroids, predict_key
+        genotypes_and_phenotypes, (_, metrics), (mpe_state, key) = self.predict(
+            model_and_dna, centroids, key
         )  # type: ignore
 
         fitness, _ = self.overall_fitness(
-            model_and_dna, metrics, mpe_state[0], fitness_key  # mpe_state[0] == repertoire
+            genotypes_and_phenotypes,
+            metrics,
+            mpe_state[0], # mpe_state[0] == repertoire
+            key
         )  # type: ignore
 
         return fitness, (dict(fitness=fitness), centroids)
@@ -123,14 +129,12 @@ class QDSearchDNA(Task):
         centroids,
         key
     ):
-        predict_key, fitness_key = jr.split(key)
-
-        (_, metrics), (mpe_state, _) = self.predict(
-            model_and_dna, centroids, predict_key
+        genotypes_and_phenotypes, (_, metrics), (mpe_state, key) = self.predict(
+            model_and_dna, centroids, key
         ) # type: ignore
 
         fitness, individual_terms = self.overall_fitness(
-            model_and_dna, metrics, mpe_state, fitness_key
+            genotypes_and_phenotypes, metrics, mpe_state, key
         ) # type: ignore
 
         metrics['fitness'] = fitness
@@ -154,7 +158,7 @@ class QDSearchDNA(Task):
 
         dnas = dna_gen(self.popsize, key=dna_key).reshape(self.popsize, -1)
 
-        scores = generate_from_dna(dnas, jr.split(score_init_key, self.popsize))
+        scores, _ = generate_from_dna(dnas, jr.split(score_init_key, self.popsize))
 
         mpe_state = self.qd_algorithm.init(dnas, centroids, scores, mpe_key)
 
@@ -169,23 +173,23 @@ class QDSearchDNA(Task):
             mpe_state, metrics = self.qd_algorithm.tell(dnas, scores, mpe_state)  # type: ignore
 
             # debugging stuff
-            jax.debug.callback(
-                plot_2d_repertoire_jax_callback_wrapper,
-                i,
-                mpe_state,
-                self.scoring_function(metrics, mpe_state[0]),
-                self.problem.descriptor_info
-            )
+            # jax.debug.callback(
+            #     plot_2d_repertoire_jax_callback_wrapper,
+            #     i,
+            #     mpe_state,
+            #     self.scoring_function(metrics, mpe_state[0]),
+            #     self.problem.descriptor_info
+            # )
 
-            return (mpe_state, outputs, next_key), (scores, metrics)
+            return (mpe_state, next_key), ((dnas, outputs), (scores, metrics))
 
-        final_state, scores_and_metrics = jax.lax.scan(
+        final_state, (genotype_and_phenotypes, scores_and_metrics) = jax.lax.scan(
             step_fn,
             (mpe_state, key),
             jnp.arange(self.n_iters)
         )
 
-        return scores_and_metrics, final_state
+        return genotype_and_phenotypes, scores_and_metrics, final_state
 
     def init_centroids(self, key):
         centroids, _ = compute_cvt_centroids(

@@ -5,7 +5,7 @@ _target_: src.task.dnaqd.QDSearchDNA
 
 popsize: 100
 
-scoring_function: ${get_fn:src.evo.qd.qd_score_x_coverage}
+score_aggregator: null  # default aggregates qd_score and coverage
 
 problem: ???
 qd_algorithm:
