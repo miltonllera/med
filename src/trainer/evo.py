@@ -58,10 +58,12 @@ class EvoTrainer(Trainer):
         params, statics = split_model(model)
         strategy, strategy_params = self.init_strategy(params)
 
+        @eqx.filter_jit
         def eval_fn(params, task_state, key):
             m = eqx.combine(params, statics)
             return self.task.eval(m, task_state, key)
 
+        @eqx.filter_jit
         def evo_step(carry, _):
             es_state, task_state, key = carry
             key, ask_key, eval_key = jr.split(key, 3)
@@ -83,10 +85,12 @@ class EvoTrainer(Trainer):
 
             return (es_state, task_state, key), log_dict
 
+        @eqx.filter_jit
         def validation_fn(params, task_state, key):
             m = eqx.combine(params, statics)
             return self.task.validate(m, task_state, key)
 
+        @eqx.filter_jit
         def val_step(carry, _):
             es_state, task_state, key = carry
             key, val_key, ask_key = jr.split(key, 3)
@@ -110,6 +114,7 @@ class EvoTrainer(Trainer):
             strategy_params=strategy_params
         )
 
+        @eqx.filter_jit
         def test_step(carry, _):
             model, task_state, key = carry
             key, test_key = jr.split(key, 2)

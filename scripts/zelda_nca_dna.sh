@@ -32,9 +32,9 @@ CUDA_VISIBLE_DEVICES="0" python -m bin.train \
 #   +model@model.dna=dna_iid_sampler
 
 # maximize pairwise correspondance between genotypes and phontypes
-CUDA_VISIBLE_DEVICES="1" python -m bin.train \
-  experiment=qd_dna_zelda_gen \
-  qd@task.qd_algorithm=cmame \
-  +qd/score_aggregator@task.score_aggregator=score_plus_pairwise_consistency \
-  +task.qd_algorithm.emitter.genotype_dim=32 \
-  +model@model.dna=dna_iid_sampler
+# CUDA_VISIBLE_DEVICES="1" python -m bin.train \
+#   experiment=qd_dna_zelda_gen \
+#   qd@task.qd_algorithm=cmame \
+#   +qd/score_aggregator@task.score_aggregator=score_plus_pairwise_consistency \
+#   +task.qd_algorithm.emitter.genotype_dim=32 \
+#   +model@model.dna=dna_iid_sampler

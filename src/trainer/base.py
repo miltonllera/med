@@ -27,8 +27,6 @@ class Trainer(ABC):
         loggers: Optional[List[Logger]],
         callbacks: Optional[List[Callback]],
         use_progress_bar: bool = True,
-        # performance options
-        _jit_step_fns: bool = True,  # use for debugging
     ) -> None:
         if loggers is None:
             loggers = []
@@ -50,7 +48,6 @@ class Trainer(ABC):
         self.callbacks = callbacks
         self.use_progress_bar = use_progress_bar
         self.metrics_formatter = lambda x: x
-        self._jit_step_fns = _jit_step_fns
 
     @abstractmethod
     def run(self, model: eqx.Module, key: KeyArray) -> eqx.Module:
@@ -70,12 +67,9 @@ class Trainer(ABC):
     def _fit_loop(self, model, train_step, val_step, *, key, **kwargs):
         _logger.info("Training is starting...")
 
-        if self._jit_step_fns:
-            train_step = eqx.filter_jit(train_step)
-            val_step = eqx.filter_jit(val_step)
-
         init_key, key = split_key(key)
         train_state = self.init("train", model, None, key=init_key, **kwargs)
+
         self.run_logger_and_callbacks('train_start', self.steps, model, train_state)
 
         for i in range(self.steps):
@@ -117,9 +111,6 @@ class Trainer(ABC):
 
     def _test_loop(self, model, test_step, trainer_state, *, key, **kwargs):
         _logger.info("Test started...")
-
-        if self._jit_step_fns:
-            test_step = eqx.filter_jit(test_step)
 
         test_state = self.init("test", model, trainer_state, key=key, **kwargs)
         self.run_logger_and_callbacks('test_start', self.eval_steps, model, test_state)

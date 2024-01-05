@@ -196,7 +196,8 @@ class QDScoreAggregator:
         self.genotype_to_phenotype_evaluator = genotype_to_phenotype_evaluator
         self.importance_coefficient = importance_coefficient
 
-    def __call__(
+    @jit_method
+    def apply(
         self,
         genotype_and_phenotype: Tuple[Genotype, Float[Array, "..."]],
         qd_metrics: Metrics,
@@ -205,3 +206,6 @@ class QDScoreAggregator:
         qd_score = self.metric_aggregator(qd_metrics, repertoire)
         mapping_score = self.genotype_to_phenotype_evaluator(*genotype_and_phenotype, repertoire)
         return qd_score + self.importance_coefficient * mapping_score
+
+    def __call__(self, *args):
+        return self.apply(*args)

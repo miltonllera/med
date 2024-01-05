@@ -1,6 +1,6 @@
 from time import time
 from abc import ABC, abstractmethod
-from functools import partial, wraps
+from functools import wraps
 from typing import Any, Callable
 
 import jax
@@ -23,7 +23,7 @@ def tree_unstack(tree):
 
 
 def tree_index(tree, index):
-    jtu.tree_map(lambda x: x[index], tree)
+    return jtu.tree_map(lambda x: x[index], tree)
 
 
 def loop(step_fn, state, n_iters):
@@ -41,13 +41,13 @@ def loop(step_fn, state, n_iters):
 def jit_method(*args, **kwargs):
 
     if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], Callable):
-        return partial(jax.jit, static_argnames=("self",))(args[0])
+        return jax.jit(args[0], static_argnames=("self",))
 
     @wraps
-    def wrapper(f):
-        return partial(jax.jit, *args, **kwargs)(f)
+    def jit_closure(f):
+        return jax.jit(f, *args, static_argnames=("self",), **kwargs)
 
-    return wrapper
+    return jit_closure
 
 
 class jax_partial:
