@@ -17,6 +17,8 @@ run_path: ???
 
 overrides: {}
 
+disable_jit: False
+
 hydra:
   run:
     dir: ${run_path}/analysis

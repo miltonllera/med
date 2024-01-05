@@ -112,7 +112,7 @@ class MonitorCheckpoint(Checkpoint):
         best_state_file = max(self._ckpts).item
         return load_pytree(self.save_dir, best_state_file, self._state_template)
 
-    def init(self, total_steps, model, initial_trainer_state):
+    def train_start(self, total_steps, model, initial_trainer_state):
         os.makedirs(self.save_dir, exist_ok=True)
 
         if self.state_getter is not None:

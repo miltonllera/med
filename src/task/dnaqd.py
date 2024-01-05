@@ -20,7 +20,7 @@ from src.evo.qd import (
 )
 from src.analysis.qd import _plot_2d_repertoire
 
-from src.utils import jax_partial
+from src.utils import jit_method
 
 
 QD_ALGORITHM = MAPElites  # Use Union to add more algorithms later
@@ -71,13 +71,12 @@ class QDSearchDNA(Task):
     def mode(self):
         return 'max'
 
-    # @jit_method
     def init(self, stage, training_state, key):
         if stage == "train":
             return self.init_centroids(key)
         return training_state  # just return the centroids we used for initalization
 
-    @jax_partial
+    @jit_method
     def overall_fitness(
         self,
         genotypes_and_phenotypes: Tuple[Array, PyTree],
@@ -102,7 +101,7 @@ class QDSearchDNA(Task):
 
         return score, individual_terms
 
-    @jax_partial
+    @jit_method
     def eval(
         self,
         model_and_dna: Tuple[FunctionalModel, DNADistribution],
@@ -122,7 +121,7 @@ class QDSearchDNA(Task):
 
         return fitness, (dict(fitness=fitness), centroids)
 
-    @jax_partial
+    @jit_method
     def validate(
         self,
         model_and_dna,
@@ -144,27 +143,22 @@ class QDSearchDNA(Task):
 
         return (metrics, extra_results), centroids
 
-    @jax_partial
+    @jit_method
     def predict(self, model_and_dna, centroids, key):
         model, dna_gen = model_and_dna
+        dna_key, score_init_key, mpe_key = jr.split(key, 3)
 
         @jax.vmap
         def generate_from_dna(genotype, key):
             output, _ = model(genotype, key)
             return self.problem(output), output
 
-        # Create the ME initial state
-        dna_key, score_init_key, mpe_key = jr.split(key, 3)
-
         dnas = dna_gen(self.popsize, key=dna_key).reshape(self.popsize, -1)
-
         scores, _ = generate_from_dna(dnas, jr.split(score_init_key, self.popsize))
 
         mpe_state = self.qd_algorithm.init(dnas, centroids, scores, mpe_key)
 
         def step_fn(carry, i):
-            # jax.debug.print("map-elite iteration: {}", i)
-
             mpe_state, key = carry
             eval_key, next_key = jr.split(key)
 

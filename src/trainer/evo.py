@@ -71,7 +71,7 @@ class EvoTrainer(Trainer):
             fitness, (log_dict, task_state) = jax.vmap(
                 eval_fn,
                 in_axes=(0, None, None),
-                out_axes=(0, (0, None)),  # do not map the task state, it's the same for all inputs
+                out_axes=(0, (0, None)),  # unmapp the task state, it's the same for all inputs
             )(params, task_state, eval_key)
 
             es_state = strategy.tell(params, fitness, es_state, strategy_params)
@@ -93,8 +93,8 @@ class EvoTrainer(Trainer):
             results, task_state = jax.vmap(
                 validation_fn,
                 in_axes=(0, None, None),
-                out_axes=(0, None),  # do not map the task state, it's the same for all inputs
-            )( params, task_state, val_key)
+                out_axes=(0, None),  # unmapp the task state, it's the same for all inputs
+            )(params, task_state, val_key)
 
             return (es_state, task_state, key), results
 
