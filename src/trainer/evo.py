@@ -1,9 +1,7 @@
-# from functools import partial
 from typing import Any, Dict, List, Optional, Union, Tuple
 
 import jax
 import jax.numpy as jnp
-import jax.tree_util as jtu
 import jax.random as jr
 import equinox as eqx
 import evosax as ex
@@ -14,7 +12,6 @@ from src.trainer.callback import Callback, MonitorCheckpoint
 from src.trainer.logger import Logger
 from src.model.base import FunctionalModel
 from src.task.base import Task
-from src.utils import tree_index
 
 
 class EvoTrainer(Trainer):
@@ -71,15 +68,11 @@ class EvoTrainer(Trainer):
             params, es_state = strategy.ask(ask_key, es_state, strategy_params)
 
             # log_dict should at least contain the same value as fitness but wrapped in a dict.
-            fitness, (log_dict, task_state) = jax.vmap(eval_fn, in_axes=(0, None, None))(
-                params, task_state, eval_key
-            )
-
-            # vmap causes all leaves in the resulting taks_state to have an extra leading dimension
-            # with pop_size number of entries. We reduce this back to a single state before the next
-            # iteratation by selecting the first element of all leaves. This is valid because by we
-            # do not vmap on the state variable and hence the value is repeated for all entries.
-            task_state = tree_index(task_state, 0)
+            fitness, (log_dict, task_state) = jax.vmap(
+                eval_fn,
+                in_axes=(0, None, None),
+                out_axes=(0, (0, None)),  # do not map the task state, it's the same for all inputs
+            )(params, task_state, eval_key)
 
             es_state = strategy.tell(params, fitness, es_state, strategy_params)
 
@@ -97,11 +90,11 @@ class EvoTrainer(Trainer):
 
             params, _ = strategy.ask(ask_key, es_state, strategy_params)
 
-            results, task_state = jax.vmap(validation_fn, in_axes=(0, None, None))(
-                params, task_state, val_key
-            )
-
-            task_state = jtu.tree_map(lambda x: x[0], task_state)
+            results, task_state = jax.vmap(
+                validation_fn,
+                in_axes=(0, None, None),
+                out_axes=(0, None),  # do not map the task state, it's the same for all inputs
+            )( params, task_state, val_key)
 
             return (es_state, task_state, key), results
 

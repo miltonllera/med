@@ -27,7 +27,7 @@ task:
 
   qd_algorithm:
     emitter:
-      batch_size: 200
+      batch_size: ${task.popsize}
 
   problem:
     height: 16
