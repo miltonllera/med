@@ -22,6 +22,10 @@ def tree_unstack(tree):
     return [treedef.unflatten(leaf) for leaf in zip(*leaves, strict=True)]
 
 
+def tree_index(tree, index):
+    jtu.tree_map(lambda x: x[index], tree)
+
+
 def loop(step_fn, state, n_iters):
     accumulated_results = []
 

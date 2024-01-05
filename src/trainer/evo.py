@@ -14,6 +14,7 @@ from src.trainer.callback import Callback, MonitorCheckpoint
 from src.trainer.logger import Logger
 from src.model.base import FunctionalModel
 from src.task.base import Task
+from src.utils import tree_index
 
 
 class EvoTrainer(Trainer):
@@ -76,7 +77,7 @@ class EvoTrainer(Trainer):
             # with pop_size number of entries. We reduce this back to a single state before the next
             # iteratation by selecting the first element of all leaves. This is valid because by we
             # do not vmap on the state variable and hence the value is repeated for all entries.
-            task_state = jtu.tree_map(lambda x: x[0], task_state)
+            task_state = tree_index(task_state, 0)
 
             es_state = strategy.tell(params, fitness, es_state, strategy_params)
 

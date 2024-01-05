@@ -12,12 +12,11 @@
 #   +model@model.dna=dna_list model.dna.n_dnas=\${task.popsize}
 
 # nca + dna sampler (using CMA emitter in the inner loop)
-# CUDA_VISIBLE_DEVICES="0" python -m bin.train \
-#   experiment=qd_dna_zelda_gen \
-#   task.n_iters=50 \
-#   qd@task.qd_algorithm=cmame  \
-#   +task.qd_algorithm.emitter.genotype_dim=32 \
-#   +model@model.dna=dna_iid_sampler \
+CUDA_VISIBLE_DEVICES="0" python -m bin.train \
+  experiment=qd_dna_zelda_gen \
+  +model@model.dna=dna_iid_sampler \
+  qd@task.qd_algorithm=cmame  \
+  +task.qd_algorithm.emitter.genotype_dim=32
 
 # # dummy strategy
 # CUDA_VISIBLE_DEVICES="3" python -m bin.train experiment=dummy_qd_dna_zelda_gen \

@@ -9,6 +9,7 @@ from jax.random import KeyArray, split as split_key
 
 from src.trainer.callback import Callback
 from src.trainer.logger import Logger
+# from src.trainer.progress_bar import ProgressBar, RichProgressBar
 from src.task.base import Task
 from src.utils import tree_stack
 
@@ -27,7 +28,7 @@ class Trainer(ABC):
         callbacks: Optional[List[Callback]],
         use_progress_bar: bool = True,
         # performance options
-        _jit_step_fns: bool = False,  # By default, do not merge the outer step functions
+        _jit_step_fns: bool = True,  # use for debugging
     ) -> None:
         if loggers is None:
             loggers = []
@@ -35,14 +36,11 @@ class Trainer(ABC):
         if callbacks is None:
             callbacks = []
 
-        if len(loggers) > 0:
-            for c in callbacks:
-                c.attach_logger(loggers[0])
+        # if use_progress_bar and not any(isinstance(c, ProgressBar) for c in callbacks):
+        #     callbacks.append(RichProgressBar(self))
 
         if eval_freq is None:
             eval_freq = eval_steps
-
-        # if use_progress_bar and
 
         self.task = task
         self.steps = steps
@@ -75,10 +73,6 @@ class Trainer(ABC):
         if self._jit_step_fns:
             train_step = eqx.filter_jit(train_step)
             val_step = eqx.filter_jit(val_step)
-
-        # if self.use_progress_bar:
-            # step_fn = progress_bar_scan(self.steps)(step_fn)
-            # val_step_fn = progress_bar_scan(self.eval_steps)(val_step_fn)
 
         init_key, key = split_key(key)
         train_state = self.init("train", model, None, key=init_key, **kwargs)
@@ -122,9 +116,6 @@ class Trainer(ABC):
         self.run_logger_and_callbacks("validation_end", self.eval_steps, metrics_hist, val_state)
 
     def _test_loop(self, model, test_step, trainer_state, *, key, **kwargs):
-        # if self.use_progress_bar:
-        #     test_step = progress_bar_scan(self.eval_steps)(test_step)
-
         _logger.info("Test started...")
 
         if self._jit_step_fns:

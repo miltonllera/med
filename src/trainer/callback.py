@@ -28,9 +28,6 @@ class Callback:
     etc.) and the attached logger instance defines where/how to save the information. This could
     be just saving it to disk or a more sophisticated storage such as WandB or TensorBoard.
     """
-    def attach_logger(self, logger):
-        self._logger = logger
-
     def train_start(self, *_):
         pass
 
@@ -115,7 +112,7 @@ class MonitorCheckpoint(Checkpoint):
         best_state_file = max(self._ckpts).item
         return load_pytree(self.save_dir, best_state_file, self._state_template)
 
-    def train_start(self, total_steps, model, initial_trainer_state):
+    def init(self, total_steps, model, initial_trainer_state):
         os.makedirs(self.save_dir, exist_ok=True)
 
         if self.state_getter is not None:
