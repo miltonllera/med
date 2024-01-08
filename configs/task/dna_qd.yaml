@@ -4,6 +4,9 @@ defaults:
 _target_: src.task.dnaqd.QDSearchDNA
 
 popsize: 100
+n_iters: 10
+n_centroids: 1000
+n_centroid_samples: null
 
 score_aggregator: null  # default aggregates qd_score and coverage
 

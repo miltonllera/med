@@ -45,7 +45,7 @@ class QDSearchDNA(Task):
         qd_algorithm: QD_ALGORITHM,
         n_iters: int,
         popsize: int,
-        n_centroids: int =1000,
+        n_centroids: int = 1000,
         n_centroid_samples: Optional[int] = None,
         score_aggregator: Optional[QDScoreAggregator] = None,
         dna_variance_coefficient: float = 1.0,
