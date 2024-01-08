@@ -19,6 +19,7 @@ from src.evo.qd import (
     compute_cvt_centroids
 )
 from src.analysis.qd import _plot_2d_repertoire
+from src.utils import jax_partial
 
 
 QD_ALGORITHM = MAPElites  # Use Union to add more algorithms later
@@ -76,7 +77,19 @@ class QDSearchDNA(Task):
             return self.init_centroids(key)
         return training_state  # just return the centroids we used for initalization
 
-    # @jax.jit
+    def init_centroids(self, key):
+        centroids, _ = compute_cvt_centroids(
+            self.problem.descriptor_length, # type: ignore
+            self.n_centroid_samples,
+            self.n_centroids,
+            self.problem.descriptor_min_val, # type: ignore
+            self.problem.descriptor_max_val, # type: ignore
+            key
+        )
+
+        return centroids
+
+    @jax_partial
     def overall_fitness(
         self,
         genotypes_and_phenotypes: Tuple[Array, PyTree],
@@ -101,7 +114,7 @@ class QDSearchDNA(Task):
 
         return score, individual_terms
 
-    # @jax.jit
+    @jax_partial
     def eval(
         self,
         model_and_dna: Tuple[FunctionalModel, DNADistribution],
@@ -121,7 +134,7 @@ class QDSearchDNA(Task):
 
         return fitness, (dict(fitness=fitness), centroids)
 
-    # @jax.jit
+    @jax_partial
     def validate(
         self,
         model_and_dna,
@@ -143,7 +156,7 @@ class QDSearchDNA(Task):
 
         return (metrics, extra_results), centroids
 
-    # @jax.jit
+    @jax_partial
     def predict(self, model_and_dna, centroids, key):
         model, dna_gen = model_and_dna
         dna_key, score_init_key, mpe_key = jr.split(key, 3)
@@ -184,18 +197,6 @@ class QDSearchDNA(Task):
         )
 
         return genotype_and_phenotypes, scores_and_metrics, final_state
-
-    def init_centroids(self, key):
-        centroids, _ = compute_cvt_centroids(
-            self.problem.descriptor_length, # type: ignore
-            self.n_centroid_samples,
-            self.n_centroids,
-            self.problem.descriptor_min_val, # type: ignore
-            self.problem.descriptor_max_val, # type: ignore
-            key
-        )
-
-        return centroids
 
     def aggregate_metrics(self, metric_values: Dict[str, ArrayLike]):
         return metric_values
