@@ -4,6 +4,7 @@ defaults:
   - /problem@task.problem: zelda_levelgen
   - /strategy@trainer.strategy: cmaes
   - /callbacks@callbacks.viz_mpe_repertoire: viz_mpe_repertoire
+  - /callbacks@callbacks.periodic_checkpoint: periodic_checkpoint
   - override /trainer: evo
   - override /model: nca_dna
   - override /task: dna_qd
@@ -56,3 +57,7 @@ callbacks:
       _target_: src.trainer.evo.BestModelFromState
   viz_mpe_repertoire:
     save_dir: ${paths.output_dir}/visualizations
+
+  periodic_checkpoint:
+    state_getter:
+      _target_: src.trainer.evo.BestModelFromState

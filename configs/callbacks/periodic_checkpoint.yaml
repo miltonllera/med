@@ -1,0 +1,7 @@
+_target_: src.trainer.callback.PeriodicCheckpoint
+
+save_dir: ${paths.output_dir}/checkpoints
+file_template: "iteration_{iteration:06d}"
+checkpoint_freq: 1
+max_checkpoints: 1
+state_getter: null

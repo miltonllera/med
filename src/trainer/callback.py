@@ -129,23 +129,21 @@ class MonitorCheckpoint(Checkpoint):
             except KeyError as e:
                 e.add_note(f"Available keys are {metric.keys()}")
 
-        self.update_checkpoints(iter, metric, state)
+        priority = metric if self.mode == "max" else -metric
+        if self.has_improved(priority):
+            self.update_checkpoints(iter, priority, state)
 
-    def update_checkpoints(self, iter, metric, state):
+    def update_checkpoints(self, iter, priority, state):
         state = self.state_getter(state)
-
         # because checkpoints are stored in a min heap,
         # we want the worst model to have the highest prioriy.
-        priority = metric if self.mode == "max" else -metric
+        file = self.file_template.format(iteration=iter)
+        to_delete = self._ckpts.push_and_pop((priority, file))
 
-        if self.has_improved(priority):
-            file = self.file_template.format(iteration=iter)
-            to_delete = self._ckpts.push_and_pop((priority, file))
-
-            save_pytree(state, self.save_dir, file)
-            if to_delete is not None:
-                path = Path(osp.join(self.save_dir, to_delete[1]))
-                path.unlink(True)
+        save_pytree(state, self.save_dir, file)
+        if to_delete is not None:
+            path = Path(osp.join(self.save_dir, to_delete[1]))
+            path.unlink(True)
 
 
 class PeriodicCheckpoint(Checkpoint):
@@ -163,8 +161,10 @@ class PeriodicCheckpoint(Checkpoint):
 
         if state_getter is not None and not isinstance(state_getter, Callable):
             getter = lambda x: x[state_getter]
-        else:
+        elif state_getter is None:
             getter = lambda x: x
+        else:
+            getter = state_getter
 
         self.state_getter = getter
         self.file_template = file_template
@@ -177,30 +177,33 @@ class PeriodicCheckpoint(Checkpoint):
     def last_checpoint_state(self):
         return self._ckpt_state
 
-    def validation_end(self, iter, metric, state) -> None:
-        if iter % self.checkpoint_freq != 0:
-            return
+    def train_start(self, total_steps, model, initial_trainer_state):
+        os.makedirs(self.save_dir, exist_ok=True)
 
+        if self.state_getter is not None and hasattr(self.state_getter, 'init'):
+            self.state_getter.init(model, initial_trainer_state)
+        self._state_template = self.state_getter(initial_trainer_state)
+
+        # use the initial state as a sentinel
+        self.update_checkpoints(0, initial_trainer_state)
+
+    def validation_end(self, iter, metric, state) -> None:
+        if iter % self.checkpoint_freq == 0:
+            self.update_checkpoints(iter, state)
+
+    def update_checkpoints(self, iter, state):
         state = self.state_getter(state)
 
         if len(self._ckpt_files) == self.max_checkpoints:
             self.delete_oldest()
 
-        self.update_files(iter, state)
+        new_file = osp.join(self.save_dir, self.file_template.format(iteration=iter))
+        self._ckpt_files.append(new_file)
+        save_pytree(state, self.save_dir, new_file)
 
     def delete_oldest(self):
         path = Path(self._ckpt_files.popleft())
         path.unlink(True)
-
-    def update_files(self, iter, state):
-        new_file = osp.join(self.save_dir, self.file_template.format(iter))
-        self._ckpt_files.append(new_file)
-
-        save_pytree(
-            state,
-            self.save_dir,
-            self.file_template.format(iteration=self._ckpt_iter)
-        )
 
 
 class VisualizationCallback(Callback):
@@ -219,7 +222,7 @@ class VisualizationCallback(Callback):
         self.save_prefix = save_prefix
         self.run_on = run_on
 
-        os.makedirs(save_dir)
+        os.makedirs(save_dir, exist_ok=True)
 
     def train_iter_end(self, *args, **kwargs):
         self._plot("train_iter_end", *args, **kwargs)
