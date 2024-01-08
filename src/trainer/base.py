@@ -6,6 +6,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import jax.tree_util as jtu
 from jax.random import KeyArray, split as split_key
+from tqdm import tqdm
 
 from src.trainer.callback import Callback
 from src.trainer.logger import Logger
@@ -72,7 +73,7 @@ class Trainer(ABC):
 
         self.run_logger_and_callbacks('train_start', self.steps, model, train_state)
 
-        for i in range(self.steps):
+        for i in tqdm(range(self.steps)):
             train_state, fitness_or_loss = train_step(train_state, i)
 
             log_dict = self.format_results("train", fitness_or_loss)
