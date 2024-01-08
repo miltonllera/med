@@ -46,7 +46,7 @@ class Callback:
     def validation_end(self, *_):
         pass
 
-    def test_init(self, *_):
+    def test_start(self, *_):
         pass
 
     def test_iter_end(self, *_):
