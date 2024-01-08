@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
@@ -20,8 +20,6 @@ from src.evo.qd import (
 )
 from src.analysis.qd import _plot_2d_repertoire
 
-from src.utils import jit_method
-
 
 QD_ALGORITHM = MAPElites  # Use Union to add more algorithms later
 
@@ -36,13 +34,15 @@ class QDSearchDNA(Task):
     qd_algorithm: QD_ALGORITHM
     n_iters: int
     popsize: int
-    centroids_fn: Callable
+    n_centroids: int
     n_centroid_samples: int
+    score_aggregator: QDScoreAggregator
+    dna_variance_coefficient: float
 
     def __init__(
         self,
-        problem,
-        qd_algorithm,
+        problem: QDProblem,
+        qd_algorithm: QD_ALGORITHM,
         n_iters: int,
         popsize: int,
         n_centroids: int =1000,
@@ -76,7 +76,7 @@ class QDSearchDNA(Task):
             return self.init_centroids(key)
         return training_state  # just return the centroids we used for initalization
 
-    @jit_method
+    # @jax.jit
     def overall_fitness(
         self,
         genotypes_and_phenotypes: Tuple[Array, PyTree],
@@ -101,12 +101,12 @@ class QDSearchDNA(Task):
 
         return score, individual_terms
 
-    @jit_method
+    # @jax.jit
     def eval(
         self,
         model_and_dna: Tuple[FunctionalModel, DNADistribution],
         centroids: PyTree,
-        key
+        key: jr.PRNGKeyArray,
     ):
         genotypes_and_phenotypes, (_, metrics), (mpe_state, key) = self.predict(
             model_and_dna, centroids, key
@@ -121,7 +121,7 @@ class QDSearchDNA(Task):
 
         return fitness, (dict(fitness=fitness), centroids)
 
-    @jit_method
+    # @jax.jit
     def validate(
         self,
         model_and_dna,
@@ -143,7 +143,7 @@ class QDSearchDNA(Task):
 
         return (metrics, extra_results), centroids
 
-    @jit_method
+    # @jax.jit
     def predict(self, model_and_dna, centroids, key):
         model, dna_gen = model_and_dna
         dna_key, score_init_key, mpe_key = jr.split(key, 3)

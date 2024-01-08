@@ -84,11 +84,9 @@ def instantiate_trainer(
         _log.info(f"Initializing trainer <{trainer_cfg._target_}> "
             f"with <{trainer_cfg.strategy._target_}> evolutionary strategy...")
 
-    trainer: Trainer = instantiate(
-        trainer_cfg,
-        task=task,
-        callbacks=callbacks,
-        logger=logger,
+    # use partial to avoid weird issue with hydra and pytrees
+    trainer: Trainer = instantiate(trainer_cfg, _partial_=True)(
+        task=task, callbacks=callbacks, logger=logger
     )
 
     return trainer

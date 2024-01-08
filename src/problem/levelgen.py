@@ -1,5 +1,4 @@
 import multiprocessing as mp
-from functools import partial
 from itertools import product
 from collections import deque, OrderedDict
 from typing import Optional, OrderedDict, Tuple
@@ -10,7 +9,6 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float
 
 from src.problem.base import QDProblem, Fitness, Descriptor, ExtraScores
-from src.utils import jit_method
 
 
 MAX_VALUE = np.finfo(np.float32).max
@@ -18,6 +16,9 @@ N_CPUS = mp.cpu_count()
 
 
 class ZeldaLevelGeneration(QDProblem):
+    height: int
+    width: int
+
     def __init__(
         self,
         height: int,
@@ -54,7 +55,7 @@ class ZeldaLevelGeneration(QDProblem):
         # empty map to - H * W and the offset to the opposit evalue. Such maps get a score of 0
         return self.height * self.width
 
-    @jit_method
+    @jax.jit
     def score(self, inputs: Float[Array, "H W"]) -> Fitness:
         """
         Computes the validity of a level by assigning a value to how well it satisfies a given set
@@ -74,7 +75,7 @@ class ZeldaLevelGeneration(QDProblem):
         # add max number of connected components to ensure quality scores are positive
         return -n_connected_components + self.score_offset
 
-    @jit_method
+    @jax.jit
     def compute_measures(self, inputs: Float[Array, "H W"]) -> Descriptor:
         path_length = jax.pure_callback(
             batched_lsp,
@@ -87,7 +88,7 @@ class ZeldaLevelGeneration(QDProblem):
 
         return jnp.concatenate([path_length, symmetry])
 
-    @jit_method
+    @jax.jit
     def extra_scores(self, _) -> ExtraScores:
         return {"dummy": jnp.empty(0)}
 

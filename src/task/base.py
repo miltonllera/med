@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Dict, List, Optional
 
 import jax.numpy as jnp
+import equinox as eqx
 from jaxtyping import Float, Array
 
 from src.utils import jit_method
@@ -48,9 +49,7 @@ class MetricCollection:
         return tuple([m(preds, targets).sum() / len(targets) for m in self.metrics])
 
 
-class Task(ABC):
-    metrics: MetricCollection
-
+class Task(ABC, eqx.Module):
     @property
     @abstractmethod
     def mode(self):
@@ -72,5 +71,6 @@ class Task(ABC):
     def predict(self, model, state, key):
         raise NotImplementedError
 
+    @abstractmethod
     def aggregate_metrics(self, metric_values):
-        return self.metrics.aggregate(metric_values)
+        raise NotImplementedError

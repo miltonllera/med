@@ -1,3 +1,7 @@
+# import sys
+# import warnings
+# import traceback
+
 import hydra
 import pyrootutils
 from omegaconf import DictConfig
@@ -16,6 +20,14 @@ root = pyrootutils.setup_root(
 
 
 log = utils.get_logger("bin.train")
+
+
+# def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
+#     log = file if hasattr(file,'write') else sys.stderr
+#     traceback.print_stack(file=log)
+#     log.write(warnings.formatwarning(message, category, filename, lineno, line))
+
+# warnings.showwarning = warn_with_traceback
 
 
 @hydra.main(config_path="../configs", config_name="train.yaml", version_base="1.3")

@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import OrderedDict, Tuple
+
+import equinox as eqx
 from jaxtyping import Array, Float
 from qdax.types import Fitness, Descriptor, ExtraScores
 
 
-class QDProblem(ABC):
+class QDProblem(ABC, eqx.Module):
     """
     A class that provides the values of measures of interest for a given output
     """

@@ -57,8 +57,8 @@ class EvoTrainer(Trainer):
 
         @eqx.filter_jit
         def eval_fn(params, task_state, key):
-            m = eqx.combine(params, statics)
-            return self.task.eval(m, task_state, key)
+            instantiated_model = eqx.combine(params, statics)
+            return self.task.eval(instantiated_model, task_state, key)
 
         @eqx.filter_jit
         def evo_step(carry, _):
@@ -67,11 +67,11 @@ class EvoTrainer(Trainer):
 
             params, es_state = strategy.ask(ask_key, es_state, strategy_params)
 
-            # log_dict should at least contain the same value as fitness but wrapped in a dict.
+            # log_dict should *at least* contain the same value as fitness but wrapped in a dict.
             fitness, (log_dict, task_state) = jax.vmap(
                 eval_fn,
                 in_axes=(0, None, None),
-                out_axes=(0, (0, None)),  # unmapp the task state, it's the same for all inputs
+                out_axes=(0, (0, None)),  # the task state *should be the same* for all outputs
             )(params, task_state, eval_key)
 
             es_state = strategy.tell(params, fitness, es_state, strategy_params)
